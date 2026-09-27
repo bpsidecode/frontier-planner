@@ -1,13 +1,18 @@
 import './style.css';
 import { getType, type BuildingType } from './data/buildings';
-import { GRID, Plan, TILE_M, clamp, rotatedSize, type Placed } from './model/plan';
+import { Plan, TILE_M, clamp, inBounds, rotatedSize, type Placed, type Rect } from './model/plan';
 import { breakdown, computeField } from './model/desirability';
 import { evaluateHouses, nextLevel, summarize, type HouseInfo } from './model/houses';
 import { Camera } from './render/camera';
-import { GREEN_AT, RED_AT, Renderer, desirabilityColor, type Ghost } from './render/canvas';
+import { GREEN_AT, RED_AT, Renderer, desirabilityColor, layerColor, type Ghost, type View } from './render/canvas';
 import { Palette } from './ui/sidebar';
 import { renderStats } from './ui/stats';
-import { exportPlan, importPlan, loadAutosave, scheduleAutosave } from './storage';
+import { exportPlan, loadAutosave, readPlanFile, saveMap, scheduleAutosave } from './storage';
+import { Terrain, blockedMask, type MapData } from './model/terrain';
+import { markersAt } from './model/markers';
+import { importSaveBuildings } from './model/mapImport';
+import { SaveFormatError, isSupportedVersion, parseSave } from './import/sav';
+import { loadOverlays, renderMapPanel } from './ui/mapPanel';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -18,12 +23,16 @@ const toastEl = $('#toast');
 const infoEl = $('#info');
 const infoTitle = $('#info-title');
 const statsEl = $('#stats');
+const mapPanelEl = $('#map-panel');
 
 const cam = new Camera();
 const renderer = new Renderer(canvas, cam);
 
-let plan = loadAutosave() ?? new Plan();
-let field: Float32Array = new Float32Array(GRID * GRID);
+const saved = loadAutosave();
+let map: MapData | null = saved.map;
+let blocked: Uint8Array | null = map ? blockedMask(map) : null;
+let plan = restorePlan(saved.planData);
+let field: Float32Array = new Float32Array(plan.size * plan.size);
 let houseMap = new Map<number, HouseInfo>();
 
 interface Placing {
@@ -35,7 +44,8 @@ interface Placing {
 let placing: Placing | null = null;
 let selectedId: number | null = null;
 let hover: { x: number; y: number } | null = null;
-let showHeatmap = true;
+let view: View = 'desirability';
+const overlays = loadOverlays();
 let showGrid = true;
 let spaceDown = false;
 let lastPointer: PointerEvent | null = null;
@@ -65,6 +75,17 @@ function describeEffect(t: BuildingType): string {
   return `<p>${reach}.</p>${tag}`;
 }
 
+/** Rebuild a plan from saved data on the current map; data from another grid size starts fresh. */
+function restorePlan(data: unknown): Plan {
+  const size = map?.size ?? 100;
+  try {
+    if (data && (((data as { size?: number }).size ?? 100) === size)) return Plan.fromJSON(data, blocked, size);
+  } catch {
+    /* fall through */
+  }
+  return new Plan(size, blocked);
+}
+
 // ---------- history ----------
 
 const undoStack: string[] = [];
@@ -78,7 +99,7 @@ function pushUndo(before = snapshot()) {
 }
 
 function restore(s: string) {
-  plan = Plan.fromJSON(JSON.parse(s));
+  plan = Plan.fromJSON(JSON.parse(s), blocked, plan.size);
   if (selectedId != null && !plan.get(selectedId)) selectedId = null;
   changed();
 }
@@ -100,8 +121,8 @@ function redo() {
 // ---------- state updates ----------
 
 function changed() {
-  field = computeField(plan.buildings);
-  renderer.setField(field);
+  field = computeField(plan.buildings, plan.size);
+  renderer.setField(field, plan.size);
   const houses = evaluateHouses(plan.buildings);
   houseMap = new Map(houses.map((h) => [h.building.id, h]));
   renderStats(statsEl, summarize(houses));
@@ -118,12 +139,15 @@ function draw() {
   raf = requestAnimationFrame(() => {
     raf = 0;
     renderer.draw({
+      size: plan.size,
       buildings: plan.buildings,
       houses: houseMap,
       selectedId,
       ghost: ghost(),
-      showHeatmap,
+      view,
       showGrid,
+      map,
+      overlays,
     });
   });
 }
@@ -211,7 +235,7 @@ function tryPaint(isClick: boolean) {
   if (key === drag.lastKey) return;
   drag.lastKey = key;
   if (!g.valid) {
-    if (isClick) toast('Can’t place here: it overlaps another building or leaves the grid');
+    if (isClick) toast(`Can’t place here: ${placeProblem(g.rect)}`);
     return;
   }
   const t = getType(placing.typeId);
@@ -221,6 +245,21 @@ function tryPaint(isClick: boolean) {
     drag.placed = true;
   }
   changed();
+}
+
+/** Why a footprint can't be placed, for the toast. */
+function placeProblem(r: Rect): string {
+  if (!inBounds(r, plan.size)) return 'it goes past the edge of the map';
+  let water = false;
+  let steep = false;
+  for (let y = r.y; y < r.y + r.h; y++)
+    for (let x = r.x; x < r.x + r.w; x++) {
+      if (plan.at(x, y)) return 'it overlaps another building';
+      const t = map?.terrain[y * plan.size + x];
+      water ||= t === Terrain.Water;
+      steep ||= t === Terrain.Steep;
+    }
+  return water ? 'that’s water' : steep ? 'the ground is too steep' : 'the spot is blocked';
 }
 
 function updateToolbar() {
@@ -342,13 +381,20 @@ function updateTooltip(e: PointerEvent) {
   }
   const tx = Math.floor(hover.x);
   const ty = Math.floor(hover.y);
-  if (tx < 0 || ty < 0 || tx >= GRID || ty >= GRID) {
+  const n = plan.size;
+  if (tx < 0 || ty < 0 || tx >= n || ty >= n) {
     tooltip.hidden = true;
     return;
   }
-  const v = field[ty * GRID + tx];
+  const i = ty * n + tx;
+  let text = `(${tx}, ${ty}) · desirability <b>${pct(field[i])}</b>`;
+  if (map) {
+    if (view !== 'desirability') text += `<br>${VIEW_LABEL[view]} <b>${Math.round((map[view][i] / 255) * 100)}%</b>`;
+    const t = map.terrain[i];
+    if (t !== Terrain.Land) text += `<br><i>${t === Terrain.Water ? 'Water' : 'Steep ground'}: can’t build</i>`;
+    for (const m of markersAt(map, overlays, hover.x, hover.y).slice(0, 6)) text += `<br>${esc(m)}`;
+  }
   const b = plan.at(tx, ty);
-  let text = `(${tx}, ${ty}) · <b>${pct(v)}</b>`;
   if (b) {
     const h = houseMap.get(b.id);
     text += `<br>${esc(getType(b.typeId).name)}${h ? ` · ${h.level.name} (${h.pct.toFixed(1)}%)` : ''}`;
@@ -493,7 +539,7 @@ window.addEventListener('keydown', (e) => {
   } else if (e.key === 'v' || e.key === 'V') {
     stopPlacing();
   } else if (e.key === 'h' || e.key === 'H') {
-    setHeatmap(!showHeatmap);
+    setView('desirability');
   } else if (e.key === 'g' || e.key === 'G') {
     setGrid(!showGrid);
   }
@@ -507,18 +553,54 @@ window.addEventListener('keyup', (e) => {
 
 // ---------- toolbar ----------
 
-const heatToggle = $<HTMLInputElement>('#toggle-heat');
 const gridToggle = $<HTMLInputElement>('#toggle-grid');
-function setHeatmap(on: boolean) {
-  showHeatmap = heatToggle.checked = on;
-  draw();
-}
 function setGrid(on: boolean) {
   showGrid = gridToggle.checked = on;
   draw();
 }
-heatToggle.addEventListener('change', () => setHeatmap(heatToggle.checked));
 gridToggle.addEventListener('change', () => setGrid(gridToggle.checked));
+
+const VIEW_LABEL: Record<View, string> = {
+  desirability: 'Desirability',
+  fertility: 'Fertility',
+  fodder: 'Fodder',
+  water: 'Groundwater',
+};
+
+function setView(v: View) {
+  if (v !== 'desirability' && !map) return;
+  view = v;
+  document.querySelectorAll<HTMLButtonElement>('#view-seg [data-view]').forEach((b) => {
+    b.classList.toggle('on', b.dataset.view === v);
+    b.disabled = b.dataset.view !== 'desirability' && !map;
+  });
+  buildLegend();
+  if (lastPointer && hover) updateTooltip(lastPointer);
+  draw();
+}
+document.querySelectorAll<HTMLButtonElement>('#view-seg [data-view]').forEach((b) =>
+  b.addEventListener('click', () => {
+    setView(b.dataset.view as View);
+    b.blur();
+  }),
+);
+
+/** Swap in a new map (or none) and plan, resetting history and the camera. */
+function setMapAndPlan(nextMap: MapData | null, nextPlan: Plan) {
+  map = nextMap;
+  blocked = map ? blockedMask(map) : null;
+  plan = nextPlan;
+  selectedId = null;
+  undoStack.length = 0;
+  redoStack.length = 0;
+  renderer.setMap(map);
+  if (!saveMap(map)) toast('The map is too large to keep after a reload; export the plan to save it');
+  if (!map && view !== 'desirability') view = 'desirability';
+  cam.fit(renderer.width, renderer.height, plan.size);
+  renderMap();
+  setView(view);
+  changed();
+}
 
 const fileInput = $<HTMLInputElement>('#file');
 fileInput.addEventListener('change', async () => {
@@ -526,15 +608,66 @@ fileInput.addEventListener('change', async () => {
   fileInput.value = '';
   if (!file) return;
   try {
-    const next = await importPlan(file);
-    pushUndo();
-    plan = next;
-    selectedId = null;
-    changed();
+    const next = await readPlanFile(file);
+    if (next.map) {
+      const nextBlocked = blockedMask(next.map);
+      setMapAndPlan(next.map, Plan.fromJSON(next.planData, nextBlocked, next.map.size));
+    } else if (map && ((next.planData as { size?: number }).size ?? 100) !== map.size) {
+      // A plan made without a map: drop the map and go back to its own grid.
+      setMapAndPlan(null, Plan.fromJSON(next.planData));
+    } else {
+      pushUndo();
+      plan = Plan.fromJSON(next.planData, blocked, plan.size);
+      selectedId = null;
+      changed();
+    }
   } catch {
     toast('That file isn’t a planner export');
   }
 });
+
+const saveInput = $<HTMLInputElement>('#sav-file');
+saveInput.addEventListener('change', async () => {
+  const file = saveInput.files?.[0];
+  saveInput.value = '';
+  if (!file) return;
+  if (plan.buildings.length && !confirm('Importing a save replaces the current plan. Export it first if you want to keep it. Continue?')) return;
+  toast('Loading map…');
+  await new Promise((r) => setTimeout(r, 30)); // let the toast paint before the parse blocks
+  try {
+    const nextMap = parseSave(await file.arrayBuffer(), file.name);
+    const { plan: nextPlan, townCenters, houses, skipped } = importSaveBuildings(nextMap);
+    setMapAndPlan(nextMap, nextPlan);
+    const parts = [`Imported ${nextMap.size}×${nextMap.size} map`];
+    if (townCenters || houses) parts.push(`${townCenters} Town Center, ${houses} houses`);
+    if (skipped) parts.push(`${skipped} overlapping buildings skipped`);
+    if (!isSupportedVersion(nextMap.version)) parts.push(`save version ${nextMap.version} is older than v1.1.0 and may be incomplete`);
+    toast(parts.join(' · '));
+  } catch (err) {
+    console.error(err);
+    toast(err instanceof SaveFormatError ? err.message : 'Couldn’t read that save file');
+  }
+});
+
+function importSave() {
+  saveInput.click();
+}
+
+function removeMap() {
+  if (!confirm('Remove the imported map and start a blank 100×100 plan? Export first if you want to keep this plan.')) return;
+  setMapAndPlan(null, new Plan());
+}
+
+function renderMap() {
+  renderMapPanel(mapPanelEl, map, overlays, {
+    importSave,
+    removeMap,
+    onOverlaysChange: () => {
+      if (lastPointer && hover) updateTooltip(lastPointer);
+      draw();
+    },
+  });
+}
 
 const actions: Record<string, () => void> = {
   select: stopPlacing,
@@ -543,11 +676,12 @@ const actions: Record<string, () => void> = {
   undo,
   redo,
   fit: () => {
-    cam.fit(renderer.width, renderer.height);
+    cam.fit(renderer.width, renderer.height, plan.size);
     draw();
   },
-  export: () => exportPlan(plan),
+  export: () => exportPlan(plan, map),
   import: () => fileInput.click(),
+  'import-save': importSave,
   clear: () => {
     if (!plan.buildings.length || !confirm('Remove every building from the plan? You can undo this.')) return;
     pushUndo();
@@ -567,6 +701,16 @@ document.querySelectorAll<HTMLButtonElement>('#toolbar [data-act]').forEach((btn
 // ---------- legend ----------
 
 function buildLegend() {
+  $('.legend-title').textContent = view === 'water' ? 'Groundwater (for wells)' : VIEW_LABEL[view];
+  if (view !== 'desirability') {
+    const stops = Array.from({ length: 11 }, (_, i) => {
+      const [r, g, b] = layerColor(view as Exclude<View, 'desirability'>, i / 10);
+      return `rgb(${r},${g},${b}) ${i * 10}%`;
+    });
+    $('.legend-bar').style.background = `linear-gradient(to right, ${stops.join(',')})`;
+    $('.legend-labels').innerHTML = [0, 25, 50, 75, 100].map((l) => `<span style="left:${l}%">${l}%</span>`).join('');
+    return;
+  }
   const span = GREEN_AT - RED_AT;
   const stops: string[] = [];
   for (let i = 0; i <= 30; i++) {
@@ -589,11 +733,13 @@ let fitted = false;
 new ResizeObserver(() => {
   renderer.resize(wrap.clientWidth, wrap.clientHeight);
   if (!fitted && wrap.clientWidth > 0) {
-    cam.fit(wrap.clientWidth, wrap.clientHeight);
+    cam.fit(wrap.clientWidth, wrap.clientHeight, plan.size);
     fitted = true;
   }
   draw();
 }).observe(wrap);
 
-buildLegend();
+renderer.setMap(map);
+renderMap();
+setView('desirability');
 changed();

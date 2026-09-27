@@ -1,9 +1,13 @@
 import { getType, type Category } from '../data/buildings';
-import { GRID, TILE_M, center, footprint, type Placed, type Rect } from '../model/plan';
+import { OVERLAY_COLOR } from '../data/overlays';
+import { TILE_M, center, footprint, type Placed, type Rect } from '../model/plan';
 import type { HouseInfo } from '../model/houses';
+import { formatAmount } from '../model/markers';
+import { Terrain, type LayerView, type MapData } from '../model/terrain';
 import type { Camera } from './camera';
 
-type RGB = [number, number, number];
+export type RGB = [number, number, number];
+export type View = 'desirability' | LayerView;
 
 const WHITE: RGB = [255, 255, 255];
 const RED: RGB = [220, 38, 38];
@@ -28,6 +32,37 @@ export function desirabilityColor(v: number): RGB {
   return t < 0.3 ? lerp(WHITE, LIGHT_GREEN, t / 0.3) : lerp(LIGHT_GREEN, DARK_GREEN, (t - 0.3) / 0.7);
 }
 
+const LAYER_STOPS: Record<LayerView, RGB[]> = {
+  fertility: [
+    [156, 112, 64],
+    [214, 200, 110],
+    [34, 120, 44],
+  ],
+  fodder: [
+    [246, 238, 190],
+    [160, 206, 120],
+    [30, 110, 90],
+  ],
+  water: [
+    [246, 250, 255],
+    [120, 180, 235],
+    [16, 70, 170],
+  ],
+};
+
+/** Three-stop color ramp for a 0–1 layer value. */
+export function layerColor(view: LayerView, v: number): RGB {
+  const [a, b, c] = LAYER_STOPS[view];
+  const t = Math.max(0, Math.min(1, v));
+  return t < 0.5 ? lerp(a, b, t * 2) : lerp(b, c, (t - 0.5) * 2);
+}
+
+const TERRAIN_BASE: Record<number, RGB> = {
+  [Terrain.Land]: [178, 196, 132],
+  [Terrain.Steep]: [148, 132, 114],
+  [Terrain.Water]: [92, 152, 212],
+};
+
 export const CATEGORY_COLORS: Record<Category, string> = {
   Housing: '#78716c',
   Amenities: '#93c5fd',
@@ -47,25 +82,54 @@ export interface Ghost {
 }
 
 export interface Scene {
+  size: number;
   buildings: Placed[];
   houses: Map<number, HouseInfo>;
   selectedId: number | null;
   ghost: Ghost | null;
-  showHeatmap: boolean;
+  view: View;
   showGrid: boolean;
+  map: MapData | null;
+  overlays: Set<string>;
+}
+
+function makeCanvas(size: number): HTMLCanvasElement {
+  const c = document.createElement('canvas');
+  c.width = size;
+  c.height = size;
+  return c;
+}
+
+/** Paint a size×size image pixel by pixel. */
+function paint(size: number, pixel: (i: number) => [number, number, number, number]): HTMLCanvasElement {
+  const c = makeCanvas(size);
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(size, size);
+  for (let i = 0; i < size * size; i++) {
+    const [r, g, b, a] = pixel(i);
+    img.data[i * 4] = r;
+    img.data[i * 4 + 1] = g;
+    img.data[i * 4 + 2] = b;
+    img.data[i * 4 + 3] = a;
+  }
+  ctx.putImageData(img, 0, 0);
+  return c;
 }
 
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
-  private heat: HTMLCanvasElement;
+  private heat: HTMLCanvasElement = makeCanvas(1);
+  private terrain: HTMLCanvasElement | null = null;
+  private layers = new Map<LayerView, HTMLCanvasElement>();
+  private map: MapData | null = null;
   width = 0;
   height = 0;
 
-  constructor(private canvas: HTMLCanvasElement, private cam: Camera) {
+  constructor(
+    private canvas: HTMLCanvasElement,
+    private cam: Camera,
+  ) {
     this.ctx = canvas.getContext('2d')!;
-    this.heat = document.createElement('canvas');
-    this.heat.width = GRID;
-    this.heat.height = GRID;
   }
 
   resize(w: number, h: number) {
@@ -77,17 +141,43 @@ export class Renderer {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  setField(field: Float32Array) {
-    const hctx = this.heat.getContext('2d')!;
-    const img = hctx.createImageData(GRID, GRID);
-    for (let i = 0; i < field.length; i++) {
-      const [r, g, b] = desirabilityColor(field[i]);
-      img.data[i * 4] = r;
-      img.data[i * 4 + 1] = g;
-      img.data[i * 4 + 2] = b;
-      img.data[i * 4 + 3] = 255;
+  /** Desirability image; over a map it's translucent so terrain shows through neutral tiles. */
+  setField(field: Float32Array, size: number) {
+    const overTerrain = !!this.map;
+    this.heat = paint(size, (i) => {
+      const v = field[i];
+      const [r, g, b] = desirabilityColor(v);
+      if (!overTerrain) return [r, g, b, 255];
+      const a = v === 0 ? 0 : Math.round(Math.min(1, Math.abs(v) / 0.25) * 0.85 * 255);
+      return [r, g, b, a];
+    });
+  }
+
+  setMap(map: MapData | null) {
+    this.map = map;
+    this.layers.clear();
+    this.terrain = map
+      ? paint(map.size, (i) => {
+          const base = TERRAIN_BASE[map.terrain[i]];
+          const k = map.terrain[i] === Terrain.Water ? 1 : 0.72 + (map.shade[i] / 255) * 0.56;
+          return [Math.min(255, base[0] * k), Math.min(255, base[1] * k), Math.min(255, base[2] * k), 255];
+        })
+      : null;
+  }
+
+  private layer(view: LayerView): HTMLCanvasElement | null {
+    const map = this.map;
+    if (!map) return null;
+    let c = this.layers.get(view);
+    if (!c) {
+      c = paint(map.size, (i) => {
+        if (map.terrain[i] === Terrain.Water) return [0, 0, 0, 0];
+        const [r, g, b] = layerColor(view, map[view][i] / 255);
+        return [r, g, b, 215];
+      });
+      this.layers.set(view, c);
     }
-    hctx.putImageData(img, 0, 0);
+    return c;
   }
 
   draw(scene: Scene) {
@@ -95,47 +185,19 @@ export class Renderer {
     const s = cam.scale;
     ctx.clearRect(0, 0, this.width, this.height);
 
-    // Board
     const o = cam.toScreen(0, 0);
-    const size = GRID * s;
-    if (scene.showHeatmap) {
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(this.heat, o.x, o.y, size, size);
-    } else {
+    const size = scene.size * s;
+    ctx.imageSmoothingEnabled = false;
+    if (this.terrain) ctx.drawImage(this.terrain, o.x, o.y, size, size);
+    else {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(o.x, o.y, size, size);
     }
+    const layer = scene.view === 'desirability' ? this.heat : this.layer(scene.view);
+    if (layer) ctx.drawImage(layer, o.x, o.y, size, size);
 
-    if (scene.showGrid && s >= 5) {
-      ctx.strokeStyle = s >= 12 ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.07)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      for (let i = 0; i <= GRID; i++) {
-        const p = Math.round(o.x + i * s) + 0.5;
-        ctx.moveTo(p, o.y);
-        ctx.lineTo(p, o.y + size);
-        const q = Math.round(o.y + i * s) + 0.5;
-        ctx.moveTo(o.x, q);
-        ctx.lineTo(o.x + size, q);
-      }
-      ctx.stroke();
-    }
-    // 10-tile major lines help count distances.
-    ctx.strokeStyle = 'rgba(0,0,0,0.18)';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let i = 0; i <= GRID; i += 10) {
-      const p = Math.round(o.x + i * s) + 0.5;
-      ctx.moveTo(p, o.y);
-      ctx.lineTo(p, o.y + size);
-      const q = Math.round(o.y + i * s) + 0.5;
-      ctx.moveTo(o.x, q);
-      ctx.lineTo(o.x + size, q);
-    }
-    ctx.stroke();
-    ctx.strokeStyle = '#44403c';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(o.x, o.y, size, size);
+    this.drawGrid(scene.size, scene.showGrid, !!this.map);
+    if (this.map) this.drawOverlays(this.map, scene);
 
     for (const b of scene.buildings) this.drawBuilding(b, scene.houses.get(b.id), b.id === scene.selectedId);
 
@@ -151,6 +213,165 @@ export class Renderer {
       ctx.lineWidth = 2;
       ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
       this.drawRadius(g.preview);
+    }
+  }
+
+  private drawGrid(n: number, showGrid: boolean, onMap: boolean) {
+    const { ctx, cam } = this;
+    const s = cam.scale;
+    const o = cam.toScreen(0, 0);
+    const size = n * s;
+    const lines = (step: number) => {
+      ctx.beginPath();
+      for (let i = 0; i <= n; i += step) {
+        const p = Math.round(o.x + i * s) + 0.5;
+        ctx.moveTo(p, o.y);
+        ctx.lineTo(p, o.y + size);
+        const q = Math.round(o.y + i * s) + 0.5;
+        ctx.moveTo(o.x, q);
+        ctx.lineTo(o.x + size, q);
+      }
+      ctx.stroke();
+    };
+    ctx.lineWidth = 1;
+    if (showGrid && s >= 5) {
+      ctx.strokeStyle = s >= 12 ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.07)';
+      lines(1);
+    }
+    // 10-tile major lines help count distances.
+    if (showGrid || !onMap) {
+      ctx.strokeStyle = onMap ? 'rgba(0,0,0,0.12)' : 'rgba(0,0,0,0.18)';
+      lines(10);
+    }
+    ctx.strokeStyle = '#44403c';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(o.x, o.y, size, size);
+  }
+
+  private drawOverlays(map: MapData, scene: Scene) {
+    const { ctx, cam } = this;
+    const s = cam.scale;
+    const vis = scene.overlays;
+    const view = { x0: cam.toTile(0, 0).x - 4, y0: cam.toTile(0, 0).y - 4 };
+    const far = cam.toTile(this.width, this.height);
+    const onScreen = (x: number, y: number, r: number) =>
+      x + r >= view.x0 && y + r >= view.y0 && x - r <= far.x + 4 && y - r <= far.y + 4;
+
+    // Spawn areas: translucent squares under everything else.
+    for (const a of map.spawns) {
+      const key = `spawn:${a.kind}`;
+      if (!vis.has(key) || !onScreen(a.x + a.size / 2, a.y + a.size / 2, a.size)) continue;
+      const p = cam.toScreen(a.x, a.y);
+      const col = OVERLAY_COLOR[key];
+      ctx.fillStyle = col + '2e';
+      ctx.fillRect(p.x, p.y, a.size * s, a.size * s);
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(p.x + 0.75, p.y + 0.75, a.size * s - 1.5, a.size * s - 1.5);
+      ctx.setLineDash([]);
+      if (a.size * s > 60) {
+        ctx.font = '600 11px system-ui, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = col;
+        ctx.fillText(`${a.kind[0].toUpperCase()}${a.kind.slice(1)} spawn`, p.x + 4, p.y + 3);
+      }
+    }
+
+    if (scene.view === 'fertility')
+      for (const f of map.fertilityBonus) {
+        if (!onScreen(f.x, f.y, f.r)) continue;
+        const p = cam.toScreen(f.x, f.y);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, Math.max(2, f.r * s), 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(173,255,47,0.35)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(77,124,15,0.8)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+
+    // Minerals: circles at the deposit's real radius, labeled with the amount when there's room.
+    for (const m of map.minerals) {
+      const key = `mineral:${m.kind}`;
+      if (!vis.has(key) || !onScreen(m.x, m.y, m.r)) continue;
+      const p = cam.toScreen(m.x, m.y);
+      const r = Math.max(4, m.r * s);
+      const col = OVERLAY_COLOR[key];
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = col + '66';
+      ctx.fill();
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      if (r >= 14) {
+        const label = m.deep ? '∞' : formatAmount(m.amount);
+        ctx.font = `700 ${Math.min(14, r * 0.55)}px system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+        ctx.strokeText(label, p.x, p.y);
+        ctx.fillStyle = '#1c1917';
+        ctx.fillText(label, p.x, p.y);
+      }
+    }
+
+    // Forageables: small dots.
+    const dot = Math.max(2, Math.min(6, s * 0.35));
+    for (const f of map.forageables) {
+      const key = `forage:${f.kind}`;
+      if (!vis.has(key) || !onScreen(f.x, f.y, 1)) continue;
+      const p = cam.toScreen(f.x, f.y);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, dot, 0, Math.PI * 2);
+      ctx.fillStyle = OVERLAY_COLOR[key];
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Enemies: dark-red diamonds (dens and camps larger), with an X.
+    for (const e of map.enemies) {
+      const key = `enemy:${e.kind}`;
+      if (!vis.has(key) || !onScreen(e.x, e.y, 2)) continue;
+      const p = cam.toScreen(e.x, e.y);
+      const big = e.kind === 'wolfDen' || e.kind === 'raiderCamp';
+      const r = Math.max(big ? 6 : 4, (big ? 1.4 : 0.8) * s);
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y - r);
+      ctx.lineTo(p.x + r, p.y);
+      ctx.lineTo(p.x, p.y + r);
+      ctx.lineTo(p.x - r, p.y);
+      ctx.closePath();
+      ctx.fillStyle = OVERLAY_COLOR[key];
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.beginPath();
+      const k = r * 0.35;
+      ctx.moveTo(p.x - k, p.y - k);
+      ctx.lineTo(p.x + k, p.y + k);
+      ctx.moveTo(p.x + k, p.y - k);
+      ctx.lineTo(p.x - k, p.y + k);
+      ctx.stroke();
+    }
+
+    // Ruins: gold squares.
+    for (const r of map.ruins) {
+      const key = `ruin:${r.kind}`;
+      if (!vis.has(key) || !onScreen(r.x, r.y, 2)) continue;
+      const p = cam.toScreen(r.x, r.y);
+      const h = Math.max(5, 1.5 * s);
+      ctx.fillStyle = OVERLAY_COLOR[key];
+      ctx.fillRect(p.x - h, p.y - h, h * 2, h * 2);
+      ctx.strokeStyle = '#5b4a0f';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(p.x - h, p.y - h, h * 2, h * 2);
     }
   }
 

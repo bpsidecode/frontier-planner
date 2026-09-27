@@ -1,5 +1,5 @@
 import { getType, type BuildingType } from '../data/buildings';
-import { GRID, TILE_M, center, type Placed } from './plan';
+import { DEFAULT_SIZE, TILE_M, center, type Placed } from './plan';
 
 /**
  * Effect of one source at point (px, py), in tile coordinates.
@@ -50,9 +50,9 @@ export function pointDesirability(buildings: Placed[], px: number, py: number): 
   return breakdown(buildings, px, py).reduce((s, c) => (c.counted ? s + c.effect : s), 0);
 }
 
-/** Desirability at the center of every tile, row-major GRID×GRID, as fractions. */
-export function computeField(buildings: Placed[]): Float32Array {
-  const field = new Float32Array(GRID * GRID);
+/** Desirability at the center of every tile, row-major size×size, as fractions. */
+export function computeField(buildings: Placed[], size = DEFAULT_SIZE): Float32Array {
+  const field = new Float32Array(size * size);
   const byTag = new Map<string, Placed[]>();
 
   for (const b of buildings) {
@@ -63,17 +63,17 @@ export function computeField(buildings: Placed[]): Float32Array {
       list.push(b);
       byTag.set(d.tag, list);
     } else {
-      forEachInRange(b, (i, e) => {
+      forEachInRange(b, size, (i, e) => {
         field[i] += e;
       });
     }
   }
 
-  const best = new Float32Array(GRID * GRID);
+  const best = new Float32Array(size * size);
   for (const list of byTag.values()) {
     best.fill(0);
     for (const b of list)
-      forEachInRange(b, (i, e) => {
+      forEachInRange(b, size, (i, e) => {
         if (Math.abs(e) > Math.abs(best[i])) best[i] = e;
       });
     for (let i = 0; i < best.length; i++) field[i] += best[i];
@@ -81,17 +81,17 @@ export function computeField(buildings: Placed[]): Float32Array {
   return field;
 }
 
-function forEachInRange(src: Placed, fn: (index: number, effect: number) => void) {
+function forEachInRange(src: Placed, size: number, fn: (index: number, effect: number) => void) {
   const d = getType(src.typeId).desirability!;
   const { cx, cy } = center(src);
   const r = d.rangeM / TILE_M;
   const x0 = Math.max(0, Math.floor(cx - r));
-  const x1 = Math.min(GRID - 1, Math.ceil(cx + r));
+  const x1 = Math.min(size - 1, Math.ceil(cx + r));
   const y0 = Math.max(0, Math.floor(cy - r));
-  const y1 = Math.min(GRID - 1, Math.ceil(cy + r));
+  const y1 = Math.min(size - 1, Math.ceil(cy + r));
   for (let y = y0; y <= y1; y++)
     for (let x = x0; x <= x1; x++) {
       const e = effectAt(src, x + 0.5, y + 0.5);
-      if (e !== 0) fn(y * GRID + x, e);
+      if (e !== 0) fn(y * size + x, e);
     }
 }

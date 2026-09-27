@@ -1,11 +1,12 @@
 # Frontier Planner
 
-A desirability planner for [Farthest Frontier](https://farthestfrontier.wiki/wiki/Farthest_Frontier_Community_Wiki). Plan a town ahead of time on a 100×100 grid to get as much desirability into your houses as possible. For each tile, the planner shows the total desirability, the level each house reaches, and how many residents the town can hold.
+A desirability planner for [Farthest Frontier](https://farthestfrontier.wiki/wiki/Farthest_Frontier_Community_Wiki). Plan a town ahead of time to get as much desirability into your houses as possible. For each tile, the planner shows the total desirability, the level each house reaches, and how many residents the town can hold. Start on a blank 100×100 grid, or import one of your saves to plan on the real terrain, with its lakes, mountains, resources, animal spawns and enemies.
 
 ```bash
 npm install
 npm run dev     # http://localhost:5173
-npm test        # unit tests for the desirability math
+npm test        # unit tests for the desirability math and the save parser
+FF_SAV=/path/to/save.sav npm test   # also check the parser against a real save
 ```
 
 ## To do
@@ -27,16 +28,29 @@ Things to confirm in the game and correct where needed:
   - [ ] Rose Bush, Low Brush, Tall Brush (1×1)
 - [ ] **Check whether houses have a starting desirability.** The planner assumes houses start at 0%. If the game gives a base amount, add it in `evaluateHouses` in [`src/model/houses.ts`](src/model/houses.ts).
 - [ ] **Decide whether Extravagant decorations need their own entries.** They aren't listed separately, because the wiki says they behave exactly like their base versions.
+- [x] **Check the imported map's orientation against the in-game map.** Confirmed correct. The planner mirrors the game's x axis, as [ff-game-map](https://github.com/mikh-abc/ff-game-map) does, so lakes and your town should appear where they are in the game.
+- [ ] **Check the terrain thresholds.** Both were calibrated on one save and live in [`src/model/terrain.ts`](src/model/terrain.ts).
+  - [ ] Water is ground below 3 m (`WATER_BELOW_M`).
+  - [x] Steep, unbuildable ground rises more than 4 m per tile (`STEEP_M_PER_TILE`). Confirmed it matches the game. If the game lets you build somewhere the planner blocks, raise it. If the planner allows spots the game refuses, lower it.
+- [ ] **Decide which fertility layer to show.** The Fertility view uses the save's environmental fertility, as ff-game-map does. The save also has a current-fertility layer, which drops as fields are farmed.
+- [ ] **Decide whether to show more forageables.** The save also lists berries, nuts, mushrooms and eggs. Adding them is a line each in `src/import/sav.ts` and `src/data/overlays.ts`.
+- [ ] **Check boar spawns.** This save has no boar spawn areas; boars roam freely. The Boar toggle will fill in for saves that have them.
+- [ ] **Import all buildings from a save, not just houses and the Town Center.** Only `TownCenter` and `Shelter` records are recognized today (see `TYPE` in [`src/import/sav.ts`](src/import/sav.ts)). The other buildings' record ids and layouts still need to be found and mapped to planner building types, including their rotation and variable sizes.
+- [ ] **Update the building catalog to game v1.1.** Some buildings are missing, such as the Academy, Book Binder and Pharmacy. Add them with their sizes and desirability in [`src/data/buildings.ts`](src/data/buildings.ts).
+- [ ] **Support terrain flattening.** The game lets you flatten steep ground so you can build on it. The planner needs a way to mark tiles as flattened, so they no longer block placement, and to save that with the plan.
+- [ ] **Update the house upgrade desirability requirements to the current game values.** The thresholds (30%, 65%, 85%, and 100% for the custom Estate) and residents per level live in [`src/data/houses.ts`](src/data/houses.ts).
+- [ ] **Add upgrade and downgrade buttons to a building's details panel.** They should appear only for buildings that have an upgrade path, such as Market ↔ Market Square, Basic Well ↔ Improved Well or Small Park ↔ Small Paved Park. Swapping a building should keep its position and rotation, and it should be undoable. This needs upgrade links added to the catalog in [`src/data/buildings.ts`](src/data/buildings.ts).
+- [ ] **Long term: write changes back to the `.sav` file.** The goal is to rearrange buildings in the planner and save them back into the game. This needs the full building record format, and it should always write a new file rather than overwrite the original save. ff-game-map's `GameMapChanger.cpp` is a starting point.
 
 ## Features
 
 - **Grid and camera**
-  - The grid is 100×100 tiles.
+  - The grid is 100×100 tiles, or the map size (384×384) after importing a save.
   - The mouse wheel zooms toward the cursor.
   - Pan by dragging empty ground, dragging with the right or middle mouse button, or holding Space and dragging.
   - **Reset view** fits the whole grid in the window.
 - **Placing buildings**
-  - Pick a building from the searchable list on the left. A preview snaps to the grid and turns red when it's off the grid or overlapping another building.
+  - Pick a building from the searchable list on the left. A preview snaps to the grid and turns red when it's off the grid, overlapping another building, or on water or steep ground.
   - Click to place it. Drag to place several at once, which is handy for roads.
   - Esc or right-click stops placing.
 - **Rotating:** press R or Tab, or use the toolbar button. This works on the preview and on a selected building. A rotated building keeps the same center.
@@ -55,6 +69,31 @@ Things to confirm in the game and correct where needed:
 - **Population panel:** shows total residents and, for each level, how many houses are at that level and how many people they hold.
 - **Saving:** plans autosave to the browser's localStorage, and you can export and import plans as JSON files.
 - **Adjustable sizes:** Crop Field (5–12) and Graveyard (3–10) have width and height inputs.
+
+## Importing a map from a save
+
+Click **Import save** and choose a `.sav` file. Saves are in `Documents\My Games\Farthest Frontier\Save`. Use the `.sav` file; the `.map` file next to it only holds terrain-generation templates.
+
+What the import brings in:
+
+- **Grid:** the grid switches to the map's size, 384×384 tiles for a standard 1920 m map. One tile is 5 m, the same as the game's grid cell.
+- **Terrain**
+  - Water and steep ground are drawn on a shaded relief and block building placement. The placement preview turns red there, and a message says why.
+  - Water is ground below 3 m. Steep ground rises more than 4 m to a neighboring tile.
+- **Your town:** the Town Center and every shelter become planner buildings, so they count toward desirability and population. You can move or delete them like any other building.
+- **Overlays:** the Map panel toggles each one. All are on by default, and your choices are remembered.
+  - **Minerals:** clay, sand, stone, iron, gold and coal, drawn at their real radius and labeled with the amount (∞ for deep deposits).
+  - **Forageables:** greens, herbs, roots and willow.
+  - **Animal spawn areas:** deer, boar, wolf and bear, as 64 m squares.
+  - **Enemies:** wolf dens, raider camps, raiders and battering rams.
+  - **Ruins:** relic and salvage sites.
+- **Views**
+  - The toolbar switches between **Desirability** (the default), **Fertility**, **Fodder** and **Water** (groundwater for wells).
+  - Only one view shows at a time, and the legend and tooltip follow it.
+
+The map is saved in the browser with the plan, about 1 MB. **Export** includes the map, so an exported plan file is self-contained. **Remove map** in the Map panel returns to a blank 100×100 plan.
+
+The save parser is a TypeScript port of the relevant parts of [mikh-abc/ff-game-map](https://github.com/mikh-abc/ff-game-map) (Apache-2.0). It's been tested on a v1.1.2a save. The spawn-area table is located by scanning, because the herd records in front of it changed shape since that project was written.
 
 ## How desirability is calculated
 
@@ -82,17 +121,24 @@ Estate is a custom level and isn't in the wiki data.
 index.html
 src/
   main.ts               – app controller: input, modes, info panel, toolbar, undo/redo
+  import/sav.ts         – .sav parser: record table, agriculture grids, heights, minerals, forageables, spawns, enemies, sites
   data/buildings.ts     – building catalog: size, category, desirability {value, rangeM, constant, tag}
+  data/overlays.ts      – map overlay groups, labels and colors
   data/houses.ts        – house level thresholds, residents and colors
-  model/plan.ts         – placed buildings, footprints, rotation, overlap/bounds checks, JSON load/save
+  model/plan.ts         – placed buildings, grid size, terrain blocking, footprints, rotation, JSON load/save
+  model/terrain.ts      – MapData, water/steep classification, hillshade, serialization
+  model/mapImport.ts    – turns the save's Town Center and shelters into planner buildings
+  model/markers.ts      – which overlay markers are under the cursor
   model/desirability.ts – effectAt, breakdown, pointDesirability, computeField (100×100 grid)
   model/houses.ts       – houseLevel, evaluateHouses, population summary
   render/camera.ts      – zoom and pan transforms (screen ↔ tile)
-  render/canvas.ts      – heatmap, grid, buildings, range circles, placement preview
+  render/canvas.ts      – terrain, views (desirability/fertility/fodder/water), overlays, grid, buildings, range circles, preview
   ui/sidebar.ts         – searchable building list
   ui/stats.ts           – population panel
+  ui/mapPanel.ts        – Map panel: import/remove, overlay toggles
   storage.ts            – localStorage autosave, JSON export/import
-tests/model.test.ts     – unit tests (vitest)
+tests/model.test.ts     – desirability, plan and house-level tests (vitest)
+tests/sav.test.ts       – save parser tests on a synthetic save, plus an optional real-save check (FF_SAV)
 ```
 
 ## Verification

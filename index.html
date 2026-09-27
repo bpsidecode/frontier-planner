@@ -30,14 +30,21 @@
           <button data-act="undo" title="Undo (Ctrl+Z)">Undo</button>
           <button data-act="redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
           <span class="sep"></span>
-          <label title="Toggle heatmap (H)"><input type="checkbox" id="toggle-heat" checked /> Heatmap</label>
+          <div id="view-seg" class="seg" role="group" aria-label="View">
+            <button data-view="desirability" title="Desirability heatmap (H)">Desirability</button>
+            <button data-view="fertility" title="Soil fertility (needs an imported map)">Fertility</button>
+            <button data-view="fodder" title="Fodder for livestock (needs an imported map)">Fodder</button>
+            <button data-view="water" title="Groundwater for wells (needs an imported map)">Water</button>
+          </div>
           <label title="Toggle grid lines (G)"><input type="checkbox" id="toggle-grid" checked /> Grid</label>
           <button data-act="fit" title="Fit the whole grid in view">Reset view</button>
           <span class="spacer"></span>
+          <button data-act="import-save" title="Import terrain and resources from a Farthest Frontier .sav file">Import save</button>
           <button data-act="export" title="Download this plan as JSON">Export</button>
           <button data-act="import" title="Load a plan from JSON">Import</button>
           <button data-act="clear" class="danger" title="Remove every building">Clear</button>
           <input type="file" id="file" accept="application/json,.json" hidden />
+          <input type="file" id="sav-file" accept=".sav" hidden />
         </div>
         <div id="canvas-wrap">
           <canvas id="map"></canvas>
@@ -60,6 +67,10 @@
           <h2 id="info-title">Selection</h2>
           <div id="info"></div>
         </section>
+        <section>
+          <h2>Map</h2>
+          <div id="map-panel"></div>
+        </section>
         <section class="help">
           <h2>Controls</h2>
           <ul>
@@ -67,7 +78,8 @@
             <li><b>R</b> / <b>Tab</b>: rotate. <b>Esc</b> / <b>right-click</b>: stop placing.</li>
             <li><b>Click</b> a building to select it and <b>drag</b> to move it. <b>Del</b> deletes it.</li>
             <li><b>Scroll</b> to zoom. <b>Drag</b> empty ground, right/middle-drag, or <b>Space</b>+drag to pan.</li>
-            <li><b>Ctrl+Z</b> / <b>Ctrl+Shift+Z</b>: undo / redo. <b>H</b>: heatmap. <b>G</b>: grid.</li>
+            <li><b>Ctrl+Z</b> / <b>Ctrl+Shift+Z</b>: undo / redo. <b>H</b>: desirability view. <b>G</b>: grid.</li>
+            <li>With a map imported, water and steep ground can’t be built on.</li>
           </ul>
         </section>
       </aside>
