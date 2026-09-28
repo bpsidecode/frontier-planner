@@ -14,7 +14,7 @@ import {
   type MineralKind,
   type Point,
   type RuinKind,
-  type SaveBuildingKind,
+  type SaveBuilding,
   type SpawnArea,
 } from '../model/terrain';
 
@@ -30,7 +30,6 @@ export const TYPE = {
   RaiderCamp: 1974594303,
   Raider: 545559295,
   BatteringRam: 2094352639,
-  Boar: 3005595647,
   TownCenter: 3556611327,
   Shelter: 2831428095,
   RelicExtraction: 2012388863,
@@ -39,8 +38,8 @@ export const TYPE = {
 
 const ITEM_FILLER = 417;
 const SPAWN_AREA_M = 64;
-/** Boars closer than this (meters) to another boar belong to the same herd. */
-const HERD_LINK_M = 40;
+/** Spawn dens are drawn as a small square this many meters across. */
+const DEN_M = 15;
 /** AgricultureInfo::DataType indexes; 12 floats per cell. */
 const AGRI_LAYERS = 12;
 const AGRI_ENV_FERTILITY = 0;
@@ -77,6 +76,99 @@ const FORAGE_ITEMS: Record<string, ForageKind> = {
 };
 
 const DEPOSIT_KINDS: Record<number, MineralKind> = { 0: 'iron', 1: 'gold', 2: 'coal' };
+
+/**
+ * Player buildings: the class name stored in each building record → planner catalog id.
+ * Upgrade tiers aren't decoded yet, so upgradable buildings import at their base tier.
+ */
+export const BUILDING_CLASSES: Record<string, string> = {
+  TownCenter: 'town-center',
+  Shelter: 'house',
+  TemporaryShelter: 'temporary-shelter',
+  Academy: 'academy',
+  Apiary: 'apiary',
+  ArboristBuilding: 'arborist-building',
+  Armory: 'armory',
+  Bakery: 'bakery',
+  Barn: 'barn',
+  Barracks: 'barracks',
+  BasketShop: 'basket-shop',
+  BlacksmithForge: 'blacksmith-forge',
+  BookBinder: 'book-binder',
+  Brewery: 'brewery',
+  Brickyard: 'brickyard',
+  CandleShop: 'candle-shop',
+  CharcoalKiln: 'charcoal-kiln',
+  Cheesemaker: 'cheesemaker',
+  ChickenCoop: 'chicken-coop',
+  ClayPitBuilding: 'clay-pit',
+  CoalMine: 'coal-mine',
+  CobblerShop: 'cobbler-shop',
+  CompostYard: 'compost-yard',
+  CooperBuilding: 'cooper',
+  Crypt: 'crypt',
+  FestivalPole: 'festival-pole',
+  FishingShack: 'fishing-shack',
+  Flagpole: 'flag-pole',
+  FletcherBuilding: 'fletcher-building',
+  ForagerShack: 'forager-shack',
+  Foundry: 'foundry',
+  Gate: 'palisade-gate',
+  Glassmaker: 'glassmaker',
+  GoatBarn: 'goat-barn',
+  GoldMine: 'gold-mine',
+  Granary: 'granary',
+  // Towers sit on wall tiles; 1×1 is the only size that doesn't collide with the walls around them.
+  GuardTower: 'lookout-tower',
+  HealersHouse: 'healers-house',
+  HunterBuilding: 'hunter-cabin',
+  IronMine: 'iron-mine',
+  LargeStatue: 'large-statue',
+  Library: 'library',
+  MarketBuilding: 'market',
+  MediumStatue: 'medium-statue',
+  OrnamentalTree: 'ornamental-tree',
+  PaperMill: 'paper-mill',
+  PotterBuilding: 'potter-building',
+  Preservist: 'preservist-building',
+  Pub: 'pub',
+  RatCatcherBuilding: 'rat-catcher',
+  RootCellar: 'root-cellar',
+  SandPitBuilding: 'sand-pit',
+  SawPitBuilding: 'saw-pit',
+  School: 'school',
+  ShrineMedium: 'shrine',
+  SmokeHouse: 'smokehouse',
+  SoapShop: 'soap-shop',
+  Stockyard: 'stockyard',
+  StonePit: 'quarry',
+  StorageDepot: 'storage-depot',
+  Storehouse: 'storehouse',
+  Tannery: 'tannery',
+  Temple: 'temple',
+  Theater: 'theater',
+  TradingPost: 'trading-post',
+  Treasury: 'treasury',
+  Urn: 'flower-urn',
+  WagonShop: 'wagon-shop',
+  Wall: 'palisade-wall',
+  WeaverBuilding: 'weaver-building',
+  Well: 'basic-well',
+  Windmill: 'windmill',
+  WoodCutterBuilding: 'firewood-splitter',
+  WorkCamp: 'work-camp',
+};
+
+/** Save records (by name prefix) that are player-built but not imported yet. */
+const NOT_IMPORTED: Record<string, string> = {
+  cropField: 'Crop fields',
+  grazingArea: 'Pastures',
+  graveyard: 'Graveyards',
+  splineRoadContainer: 'Road segments',
+  bridgeContainer: 'Bridges',
+  buildingBuildSite: 'Construction sites',
+  gateBuildSite: 'Construction sites',
+};
 
 export class SaveFormatError extends Error {}
 
@@ -126,6 +218,8 @@ class Reader {
 }
 
 interface Span {
+  /** Record name without its trailing index, e.g. "hunterBuilding". */
+  name: string;
   /** First payload byte (after the type id and one pad byte). */
   start: number;
   /** One past the record's last byte. */
@@ -138,13 +232,13 @@ export function readRecordSpans(buf: ArrayBuffer): Map<number, Span[]> {
   const table = new Map<number, Span[]>();
   while (r.pos < r.length) {
     r.skip(1); // component type
-    r.skip(r.u8()); // field name
+    const name = r.str().replace(/\d+$/, '');
     const size = r.u32();
     const start = r.pos;
     if (size < 4 || start + size > r.length) throw new SaveFormatError('This doesn’t look like a Farthest Frontier save');
     const id = r.u32();
     const list = table.get(id) ?? [];
-    list.push({ start: start + 5, end: start + size });
+    list.push({ name, start: start + 5, end: start + size });
     table.set(id, list);
     r.pos = start + size;
   }
@@ -353,28 +447,25 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
     }
   }
 
-  // Boars have no spawn area in v1.1 saves (their area key is -1); they roam in small herds.
-  // Show each herd's current location as a spawn-sized square so boar hunting grounds still appear.
-  const boars: { x: number; z: number }[] = [];
-  for (const pos of all(TYPE.Boar)) {
+  // --- dens: "wolfDen" records hold both wolf dens and boar dens (class "BoarDen").
+  // Boars have no spawn areas in v1.1 saves, so their dens are the boar spawns.
+  const enemies: Point<EnemyKind>[] = [];
+  const latin1 = new TextDecoder('latin1');
+  for (const span of spans.get(TYPE.WolfDen) ?? []) {
     try {
-      const r = at(pos);
+      const r = at(span.start);
       r.skip(5);
-      boars.push(r.point());
+      const p = toTile(r.point());
+      if (latin1.decode(new Uint8Array(buf, span.start, span.end - span.start)).includes('BoarDen')) {
+        const size = DEN_M / cellM;
+        spawns.push({ kind: 'boar', x: p.x - size / 2, y: p.y - size / 2, size, den: true });
+      } else enemies.push({ kind: 'wolfDen', ...p });
     } catch {
       /* skip */
     }
   }
-  for (const herd of clusterPoints(boars, HERD_LINK_M)) {
-    const cx = herd.reduce((s, p) => s + p.x, 0) / herd.length;
-    const cz = herd.reduce((s, p) => s + p.z, 0) / herd.length;
-    const c = toTile({ x: cx, z: cz });
-    const size = SPAWN_AREA_M / cellM;
-    spawns.push({ kind: 'boar', x: c.x - size / 2, y: c.y - size / 2, size, herd: true });
-  }
 
   // --- enemies
-  const enemies: Point<EnemyKind>[] = [];
   const pushAll = (id: number, kind: EnemyKind, read: (r: Reader) => { x: number; z: number }) => {
     for (const pos of all(id)) {
       try {
@@ -384,7 +475,6 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
       }
     }
   };
-  pushAll(TYPE.WolfDen, 'wolfDen', (r) => (r.skip(5), r.point()));
   pushAll(TYPE.RaiderCamp, 'raiderCamp', (r) => {
     r.skip(4);
     if (r.u8()) r.skip(4);
@@ -402,7 +492,6 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
     return toTile(r.point());
   };
   const ruins: Point<RuinKind>[] = [];
-  const buildings: Point<SaveBuildingKind>[] = [];
   const collect = <K extends string>(id: number, kind: K, into: Point<K>[]) => {
     for (const pos of all(id)) {
       try {
@@ -414,8 +503,45 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
   };
   collect(TYPE.RelicExtraction, 'relic', ruins);
   collect(TYPE.SalvagingSite, 'salvage', ruins);
-  collect(TYPE.TownCenter, 'townCenter', buildings);
-  collect(TYPE.Shelter, 'shelter', buildings);
+
+  // --- player buildings: every record whose header decodes to a known building class.
+  // Header: u32 id, u8 hasParent (+41 bytes), 1 byte, position, rotation quaternion, scale, class name.
+  const buildings: SaveBuilding[] = [];
+  const notImported: Record<string, number> = {};
+  for (const list of spans.values())
+    for (const span of list) {
+      const label = NOT_IMPORTED[span.name];
+      if (label) {
+        notImported[label] = (notImported[label] ?? 0) + 1;
+        continue;
+      }
+      if (span.name.startsWith('raider') || span.end - span.start < 60) continue;
+      try {
+        const r = at(span.start);
+        r.u32();
+        const parent = r.u8();
+        if (parent > 1) continue;
+        if (parent) r.skip(41);
+        r.skip(1);
+        const p = r.point();
+        r.skip(4); // quaternion x
+        const qy = r.f32();
+        r.skip(4);
+        const qw = r.f32();
+        r.skip(12); // scale
+        const cls = r.str();
+        const typeId = BUILDING_CLASSES[cls];
+        if (!typeId) {
+          if (cls === 'Decorations') notImported['Other decorations'] = (notImported['Other decorations'] ?? 0) + 1;
+          continue;
+        }
+        if (!(p.x >= 0 && p.x <= worldM && p.z >= 0 && p.z <= worldM)) continue;
+        const yaw = 2 * Math.atan2(qy, qw);
+        buildings.push({ typeId, ...toTile(p), rot: ((Math.round(yaw / (Math.PI / 2)) % 4) + 4) % 4 });
+      } catch {
+        /* not a building record */
+      }
+    }
 
   return {
     name: fileName.replace(/\.sav$/i, ''),
@@ -433,19 +559,8 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
     ruins,
     fertilityBonus,
     buildings,
+    notImported,
   };
-}
-
-/** Single-link clustering: points within `linkM` of any member join the same group. */
-function clusterPoints<P extends { x: number; z: number }>(points: P[], linkM: number): P[][] {
-  const groups: P[][] = [];
-  for (const p of points) {
-    const hits = groups.filter((g) => g.some((q) => Math.hypot(p.x - q.x, p.z - q.z) < linkM));
-    const merged = [p, ...hits.flat()];
-    for (const h of hits) groups.splice(groups.indexOf(h), 1);
-    groups.push(merged);
-  }
-  return groups;
 }
 
 /** The repo refuses saves older than v1.1.0; we only warn. */

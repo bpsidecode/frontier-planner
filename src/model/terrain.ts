@@ -38,15 +38,24 @@ export interface SpawnArea {
   x: number;
   y: number;
   size: number;
-  /** True for a roaming herd's current location rather than a fixed spawn area (boars have none). */
-  herd?: boolean;
+  /** A den (a point the animals spawn from) rather than a 64 m spawn area. Boars spawn from dens. */
+  den?: boolean;
 }
 export interface FertilityBonus {
   x: number;
   y: number;
   r: number;
 }
-export type SaveBuildingKind = 'townCenter' | 'shelter';
+/** A player building from the save. */
+export interface SaveBuilding {
+  /** Planner catalog id, e.g. "town-center". */
+  typeId: string;
+  /** Center in tile coordinates. */
+  x: number;
+  y: number;
+  /** Game rotation in quarter turns (0–3). */
+  rot: number;
+}
 
 export interface MapData {
   name: string;
@@ -67,7 +76,9 @@ export interface MapData {
   enemies: Point<EnemyKind>[];
   ruins: Point<RuinKind>[];
   fertilityBonus: FertilityBonus[];
-  buildings: Point<SaveBuildingKind>[];
+  buildings: SaveBuilding[];
+  /** Save objects the importer doesn't handle yet, by label (e.g. "Crop fields": 11). */
+  notImported: Record<string, number>;
 }
 
 export type LayerView = 'fertility' | 'fodder' | 'water';
@@ -144,6 +155,15 @@ export function deserializeMap(raw: unknown): MapData | null {
   }
   for (const k of ['minerals', 'forageables', 'spawns', 'enemies', 'ruins', 'fertilityBonus', 'buildings'] as const)
     if (!Array.isArray(map[k])) (map as unknown as Record<string, unknown[]>)[k] = [];
+  // Maps saved before all buildings were imported stored { kind: 'townCenter' | 'shelter', x, y }.
+  const legacy: Record<string, string> = { townCenter: 'town-center', shelter: 'house' };
+  map.buildings = map.buildings
+    .map((b) => {
+      const o = b as unknown as Record<string, unknown>;
+      return { typeId: String(o.typeId ?? legacy[String(o.kind)] ?? ''), x: Number(o.x), y: Number(o.y), rot: Number(o.rot ?? 0) };
+    })
+    .filter((b) => b.typeId);
+  if (!map.notImported || typeof map.notImported !== 'object') map.notImported = {};
   return map;
 }
 

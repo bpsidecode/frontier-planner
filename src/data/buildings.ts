@@ -76,6 +76,7 @@ const unverified = { sizeUnverified: true };
 
 // Housing — the level is derived from desirability, so there's a single house type.
 add('Housing', 'House', 3, 3, null, { id: 'house', house: true });
+add('Housing', 'Temporary Shelter', 3, 3);
 
 // Amenities & services
 add('Amenities', 'Town Center', 6, 6, [0.1, 200, 'TownCenter']);
@@ -95,6 +96,12 @@ add('Amenities', 'Grand Theater', 5, 5, [0.08, 400, 'Theater']);
 add('Amenities', 'Festival Pole', 4, 4, [0.04, 180, 'FestivalPole']);
 add('Amenities', 'Paved Festival Pole', 4, 4, [0.08, 180, 'FestivalPole']);
 add('Amenities', 'Apothecary Shop', 2, 3);
+// Added in game v1.1 and not on the wiki. Sizes fit the save's building centers (odd/even sides) and don't
+// collide with neighbouring buildings in a real town, but the exact numbers are unconfirmed.
+add('Amenities', 'Academy', 3, 4, null, unverified);
+add('Amenities', 'Book Binder', 2, 3, null, unverified);
+add('Amenities', 'Crypt', 3, 3, null, unverified);
+add('Amenities', 'Treasury', 3, 4, null, unverified);
 add('Amenities', 'Guild Hall', 4, 5);
 add('Amenities', 'Rat Catcher', 2, 2);
 add('Amenities', 'Trading Post', 4, 5);
@@ -163,19 +170,19 @@ add('Resources', 'Charcoal Kiln', 3, 4, [-0.4, 65, 'CharcoalKiln']);
 add('Resources', 'Glassmaker', 3, 4, [-0.3, 60, 'Glassmaker', true]);
 add('Resources', 'Stable', 3, 4, [-0.3, 50, 'Stable', true]);
 add('Resources', 'Tannery', 3, 3, [-0.3, 75]);
-add('Resources', 'Paper Mill', 3, 4, [-0.3, 75], unverified);
-add('Resources', 'Coal Mine', 3, 3, [-0.25, 50, 'CoalMine']);
+add('Resources', 'Paper Mill', 4, 4, [-0.3, 75], unverified);
+add('Resources', 'Coal Mine', 4, 4, [-0.25, 50, 'CoalMine'], unverified);
 add('Resources', 'Deep Coal Mine', 3, 3, [-0.25, 65, 'CoalMine'], unverified);
-add('Resources', 'Gold Mine', 3, 3, [-0.25, 50, 'GoldMine']);
+add('Resources', 'Gold Mine', 4, 4, [-0.25, 50, 'GoldMine'], unverified);
 add('Resources', 'Deep Gold Mine', 3, 3, [-0.25, 50, 'GoldMine'], unverified);
-add('Resources', 'Iron Mine', 3, 3, [-0.2, 50, 'IronMine']);
+add('Resources', 'Iron Mine', 4, 4, [-0.2, 50, 'IronMine'], unverified);
 add('Resources', 'Deep Iron Mine', 3, 3, [-0.25, 50, 'IronMine'], unverified);
 add('Resources', 'Blacksmith Forge', 3, 4, [-0.2, 50, 'BlacksmithForge']);
 add('Resources', 'Blacksmith Workshop', 3, 4, [-0.2, 50, 'BlacksmithForge']);
 add('Resources', 'Foundry', 3, 4, [-0.2, 50, 'Foundry']);
 add('Resources', 'Smeltery', 3, 4, [-0.2, 50, 'Foundry']);
 add('Resources', 'Brickyard', 4, 5, [-0.2, 40, 'Brickyard']);
-add('Resources', 'Quarry', 4, 4, [-0.2, 50, 'StonePit'], unverified);
+add('Resources', 'Quarry', 3, 4, [-0.2, 50, 'StonePit'], unverified);
 add('Resources', 'Saw Pit', 3, 4, [-0.2, 65]);
 add('Resources', 'Saw Mill', 3, 4, [-0.2, 65]);
 add('Resources', 'Soap Shop', 3, 4, [-0.15, 45, 'SoapShop', true]);
@@ -211,6 +218,7 @@ add('Storage', 'Root Cellar', 2, 3);
 add('Storage', 'Brick Root Cellar', 2, 3);
 add('Storage', 'Cooper', 3, 3);
 add('Storage', 'Wagon Shop', 3, 3);
+add('Storage', 'Storage Depot', 2, 3, null, unverified);
 
 // Defenses
 add('Defenses', 'Barracks', 4, 6);

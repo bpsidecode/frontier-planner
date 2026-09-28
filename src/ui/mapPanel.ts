@@ -69,9 +69,14 @@ export function renderMapPanel(root: HTMLElement, map: MapData | null, visible: 
       </details>`;
   }).join('');
 
+  const pending = Object.entries(map.notImported ?? {}).sort((a, b) => b[1] - a[1]);
+  const pendingNote = pending.length
+    ? `<p class="tagnote">Not imported yet: ${pending.map(([k, n]) => `${escapeHtml(k.toLowerCase())} (${n})`).join(', ')}.</p>`
+    : '';
   root.innerHTML = `
     <div class="map-meta"><b>${escapeHtml(map.name)}</b><br>
-      <span class="tagnote">${map.size}×${map.size} tiles${map.version ? ` · game ${escapeHtml(map.version)}` : ''}</span></div>
+      <span class="tagnote">${map.size}×${map.size} tiles${map.version ? ` · game ${escapeHtml(map.version)}` : ''} · ${map.buildings.length} buildings from the save</span></div>
+    ${pendingNote}
     ${groups}
     <div class="actions">
       <button class="btn" data-map="import">Import another…</button>

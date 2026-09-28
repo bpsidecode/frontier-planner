@@ -57,12 +57,13 @@ Replacing the map goes through `setMapAndPlan()`, which also resets history and 
 - **Point coordinates:** world `(x, z)` in meters maps to tile `col = (worldM − x)/cell` and `row = z/cell`, so x is mirrored.
 - **Grid coordinates:** grids stored `[i][j]` map to `row = i`, `col = N−1−j`.
 - **Checked in-game:** the orientation is confirmed against the game.
-- **Spawn areas:** the spawn-area table in the AnimalManager record is found by scanning (`findSpawnTable`), because the herd records in front of it changed format in v1.1.x. Forageable records use a fixed 417-byte item filler. Boars never have a spawn area in v1.1 saves, so the parser groups boar records into herds and adds them as `SpawnArea`s with `herd: true`.
+- **Spawn areas:** the spawn-area table in the AnimalManager record is found by scanning (`findSpawnTable`), because the herd records in front of it changed format in v1.1.x. Forageable records use a fixed 417-byte item filler. Boars never have a spawn area in v1.1 saves; see dens below.
 - **Output:** the parser produces a `MapData` (`model/terrain.ts`):
   - `Uint8Array` layers (terrain class, hillshade, fertility, fodder and groundwater, each 0–255)
   - lists of markers, already in tile coordinates
 - **Terrain thresholds:** `WATER_BELOW_M = 3` and `STEEP_M_PER_TILE = 4`. Both have been checked against the game.
-- **Imported buildings:** `model/mapImport.ts` turns the save's Town Center and shelters into planner buildings, treating game positions as building centers.
+- **Buildings:** any record whose header decodes (id, parent flag, position, quaternion, scale, then a class-name string) and whose class is in `BUILDING_CLASSES` becomes a `SaveBuilding`. Records with other layouts (fields, pastures, graveyards, roads, bridges) are counted in `MapData.notImported` by record name. `model/mapImport.ts` places them treating game positions as building centers. It picks the planner rotation whose odd/even sides match the center's half/whole-tile offsets, which also handles catalog entries listed as w×h where the game uses h×w. Its report of overlaps and size mismatches is the way to check catalog sizes against a real save.
+- **Dens:** `wolfDen` records hold both wolf dens and boar dens (class `BoarDen`). Boar dens are the boar spawns (`SpawnArea` with `den: true`).
 - **Keep `Terrain` a regular `enum`.** A `const enum` breaks under Vite's per-file transpilation.
 
 **Overlays** are identified by keys of the form `group:kind`, such as `mineral:iron` or `forage:herbs`. The keys, labels and colors are defined once in `data/overlays.ts`, and the renderer, the Map panel (`ui/mapPanel.ts`) and the tooltip (`model/markers.ts`) all use them. To add a kind, add it to three places: the parser's lookup (e.g. `FORAGE_ITEMS`), the union type in `terrain.ts`, and `OVERLAY_GROUPS`.

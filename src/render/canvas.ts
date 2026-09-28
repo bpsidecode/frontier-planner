@@ -257,10 +257,10 @@ export class Renderer {
     const onScreen = (x: number, y: number, r: number) =>
       x + r >= view.x0 && y + r >= view.y0 && x - r <= far.x + 4 && y - r <= far.y + 4;
 
-    // Spawn areas: translucent squares under everything else.
+    // Spawn areas: translucent squares under everything else. Dens are drawn with the enemies below.
     for (const a of map.spawns) {
       const key = `spawn:${a.kind}`;
-      if (!vis.has(key) || !onScreen(a.x + a.size / 2, a.y + a.size / 2, a.size)) continue;
+      if (a.den || !vis.has(key) || !onScreen(a.x + a.size / 2, a.y + a.size / 2, a.size)) continue;
       const p = cam.toScreen(a.x, a.y);
       const col = OVERLAY_COLOR[key];
       ctx.fillStyle = col + '2e';
@@ -275,7 +275,7 @@ export class Renderer {
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.fillStyle = col;
-        ctx.fillText(`${a.kind[0].toUpperCase()}${a.kind.slice(1)} ${a.herd ? 'herd' : 'spawn'}`, p.x + 4, p.y + 3);
+        ctx.fillText(`${a.kind[0].toUpperCase()}${a.kind.slice(1)} spawn`, p.x + 4, p.y + 3);
       }
     }
 
@@ -358,6 +358,28 @@ export class Renderer {
       ctx.lineTo(p.x + k, p.y + k);
       ctx.moveTo(p.x + k, p.y - k);
       ctx.lineTo(p.x - k, p.y + k);
+      ctx.stroke();
+    }
+
+    // Spawn dens (boars): diamonds in the animal's color.
+    for (const a of map.spawns) {
+      const key = `spawn:${a.kind}`;
+      if (!a.den || !vis.has(key)) continue;
+      const cx = a.x + a.size / 2;
+      const cy = a.y + a.size / 2;
+      if (!onScreen(cx, cy, 2)) continue;
+      const p = cam.toScreen(cx, cy);
+      const r = Math.max(6, 1.4 * s);
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y - r);
+      ctx.lineTo(p.x + r, p.y);
+      ctx.lineTo(p.x, p.y + r);
+      ctx.lineTo(p.x - r, p.y);
+      ctx.closePath();
+      ctx.fillStyle = OVERLAY_COLOR[key];
+      ctx.fill();
+      ctx.strokeStyle = '#3f2d00';
+      ctx.lineWidth = 1.5;
       ctx.stroke();
     }
 

@@ -636,11 +636,16 @@ saveInput.addEventListener('change', async () => {
   await new Promise((r) => setTimeout(r, 30)); // let the toast paint before the parse blocks
   try {
     const nextMap = parseSave(await file.arrayBuffer(), file.name);
-    const { plan: nextPlan, townCenters, houses, skipped } = importSaveBuildings(nextMap);
-    setMapAndPlan(nextMap, nextPlan);
-    const parts = [`Imported ${nextMap.size}×${nextMap.size} map`];
-    if (townCenters || houses) parts.push(`${townCenters} Town Center, ${houses} house${houses === 1 ? '' : 's'}`);
-    if (skipped) parts.push(`${skipped} overlapping buildings skipped`);
+    const report = importSaveBuildings(nextMap);
+    setMapAndPlan(nextMap, report.plan);
+    const total = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a + b, 0);
+    const placed = total(report.imported);
+    const overlapping = total(report.overlapping);
+    const pending = total(nextMap.notImported);
+    const parts = [`Imported ${nextMap.size}×${nextMap.size} map with ${placed} building${placed === 1 ? '' : 's'}`];
+    if (overlapping) parts.push(`${overlapping} skipped (overlapping)`);
+    if (pending) parts.push(`${pending} not supported yet (see Map panel)`);
+    console.info('Save import', report, nextMap.notImported);
     if (!isSupportedVersion(nextMap.version)) parts.push(`save version ${nextMap.version} is older than v1.1.0 and may be incomplete`);
     toast(parts.join(' · '));
   } catch (err) {

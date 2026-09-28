@@ -73,8 +73,15 @@ function syntheticSave(): ArrayBuffer {
     .u32(0);
   record(out, 'mineralManager', TYPE.MineralManager, mn);
 
-  // Town center at world (10, 10) with no parent transform → tile (2, 2).
-  record(out, 'townCenter', TYPE.TownCenter, new Writer().u32(42).u8(0).u8(0).point(10, 10));
+  // Town center at world (10, 10), no parent transform, no rotation → tile (2, 2). Header is
+  // id, hasParent, pad, position, quaternion (x, y, z, w), scale, class name, then building data.
+  const tc = new Writer().u32(42).u8(0).u8(0).point(10, 10).f32(0).f32(0).f32(0).f32(1).f32(1).f32(1).f32(1).str('TownCenter').zeros(32);
+  record(out, 'townCenter', 3556611327, tc);
+  // A cabin rotated 90° (quaternion y = w = √½) at a half-tile center, and an unknown class that must be ignored.
+  const s = Math.SQRT1_2;
+  record(out, 'hunterBuilding', 1, new Writer().u32(43).u8(0).u8(0).point(7.5, 12.5).f32(0).f32(s).f32(0).f32(s).f32(1).f32(1).f32(1).str('HunterBuilding').zeros(32));
+  record(out, 'mysteryBuilding', 2, new Writer().u32(44).u8(0).u8(0).point(5, 5).f32(0).f32(0).f32(0).f32(1).f32(1).f32(1).f32(1).str('Mystery').zeros(32));
+  record(out, 'cropField', 3, new Writer().zeros(64));
   return new Uint8Array(out.bytes).buffer;
 }
 
@@ -110,7 +117,11 @@ describe('save parser (synthetic)', () => {
     expect(clay).toMatchObject({ x: 1, y: 2, r: 1, amount: 1000, deep: false });
     const iron = map.minerals.find((m) => m.kind === 'iron')!;
     expect(iron).toMatchObject({ x: 3, y: 1, r: 0.5, amount: 500, deep: true });
-    expect(map.buildings).toEqual([{ kind: 'townCenter', x: 2, y: 2 }]);
+    expect(map.buildings).toEqual([
+      { typeId: 'town-center', x: 2, y: 2, rot: 0 },
+      { typeId: 'hunter-cabin', x: 2.5, y: 2.5, rot: 1 },
+    ]);
+    expect(map.notImported).toEqual({ 'Crop fields': 1 });
   });
 
   it('round-trips through serialization', () => {
@@ -157,10 +168,17 @@ describe.skipIf(!realPath)('real save file', () => {
   });
 
   it('imports the town onto land', () => {
-    const { plan, skipped } = importSaveBuildings(map);
-    console.log('imported', plan.buildings.length, 'skipped', skipped);
-    expect(skipped).toBe(0);
-    for (const b of plan.buildings) {
+    const { plan, imported, overlapping, sizeMismatch } = importSaveBuildings(map);
+    console.log('imported', JSON.stringify(imported));
+    console.log('overlapping', JSON.stringify(overlapping), 'sizeMismatch', JSON.stringify(sizeMismatch));
+    console.log('notImported', JSON.stringify(map.notImported));
+    // A handful of buildings stand right against each other in real towns; a few one-tile clashes are expected.
+    const count = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a + b, 0);
+    expect(count(overlapping)).toBeLessThanOrEqual(5);
+    // Some gates are two tiles wide (centered on a whole tile); every other building fits its catalog size.
+    expect(Object.keys(sizeMismatch).filter((k) => k !== 'palisade-gate')).toEqual([]);
+    // Walls and gates can run to the water's edge; every other building must stand on land.
+    for (const b of plan.buildings.filter((x) => !x.typeId.startsWith('palisade-'))) {
       const f = footprint(b);
       for (let y = f.y; y < f.y + f.h; y++)
         for (let x = f.x; x < f.x + f.w; x++) expect(map.terrain[y * map.size + x]).not.toBe(Terrain.Water);

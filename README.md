@@ -26,6 +26,13 @@ Things to confirm in the game and correct where needed:
   - [ ] Trellis (1×2)
   - [ ] Rose Garden (2×2)
   - [ ] Rose Bush, Low Brush, Tall Brush (1×1)
+- [ ] **Confirm the sizes of buildings added from saves.** These aren't on the wiki. Each size fits where the game centers the building (odd sides sit on half tiles, even sides on whole tiles) and doesn't collide with neighboring buildings in the Lametree save, but the exact numbers need checking in-game.
+  - [ ] Academy (3×4), Treasury (3×4)
+  - [ ] Book Binder (2×3), Storage Depot (2×3)
+  - [ ] Crypt (3×3)
+  - [ ] Coal Mine, Iron Mine, Gold Mine (4×4). The wiki says 3×3, but the game centers mines on whole tiles, so their sides must be even.
+  - [ ] Paper Mill (4×4), Quarry (3×4)
+  - [ ] Guard towers are imported as the 1×1 Lookout Tower. They sit on wall tiles, and 1×1 is the only size that doesn't collide with the walls around them.
 - [ ] **Check whether houses have a starting desirability.** The planner assumes houses start at 0%. If the game gives a base amount, add it in `evaluateHouses` in [`src/model/houses.ts`](src/model/houses.ts).
 - [ ] **Decide whether Extravagant decorations need their own entries.** They aren't listed separately, because the wiki says they behave exactly like their base versions.
 - [x] **Check the imported map's orientation against the in-game map.** Confirmed correct. The planner mirrors the game's x axis, as [ff-game-map](https://github.com/mikh-abc/ff-game-map) does, so lakes and your town should appear where they are in the game.
@@ -34,9 +41,15 @@ Things to confirm in the game and correct where needed:
   - [x] Steep, unbuildable ground rises more than 4 m per tile (`STEEP_M_PER_TILE`). Confirmed it matches the game. If the game lets you build somewhere the planner blocks, raise it. If the planner allows spots the game refuses, lower it.
 - [ ] **Decide which fertility layer to show.** The Fertility view uses the save's environmental fertility, as ff-game-map does. The save also has a current-fertility layer, which drops as fields are farmed.
 - [ ] **Decide whether to show more forageables.** The save also lists berries, nuts, mushrooms and eggs. Adding them is a line each in `src/import/sav.ts` and `src/data/overlays.ts`.
-- [x] **Check boar spawns.** In v1.1 saves boars never have a spawn area (their area key is −1 on every boar in two different saves). The Boar toggle instead shows each herd's current location, grouping boars within 40 m of each other.
-- [ ] **Import all buildings from a save, not just houses and the Town Center.** Only `TownCenter` and `Shelter` records are recognized today (see `TYPE` in [`src/import/sav.ts`](src/import/sav.ts)). Other buildings have their own record ids, but each record's name identifies the building (`hunterBuilding0`, `well0`, `supplyWagon0`), and the hunter's cabin and well use the same position layout as the Town Center, so mapping names to planner types looks straightforward. Rotation and variable sizes still need to be found. Raider guard towers (`raiderGuardTower0`) use a different layout and aren't shown yet.
-- [ ] **Update the building catalog to game v1.1.** Some buildings are missing, such as the Academy, Book Binder and Pharmacy. Add them with their sizes and desirability in [`src/data/buildings.ts`](src/data/buildings.ts).
+- [x] **Check boar spawns.** Boars have no spawn areas in v1.1 saves. They spawn from boar dens, which the save stores in the same record type as wolf dens. The Boar toggle shows boar dens, and the Enemies group shows only wolf dens.
+- [ ] **Import all buildings from a save.** Most are done: 74 building classes map to planner buildings with their position and rotation (`BUILDING_CLASSES` in [`src/import/sav.ts`](src/import/sav.ts)). On the Lametree save that's 1,167 buildings, with 2 skipped because they touch a neighbor. Still to do:
+  - [ ] **Upgrade tiers.** Upgraded buildings import at their base tier, e.g. every Market Square as a Market and every Improved Well as a Basic Well, so their desirability is too low. The tier isn't near the start of the record. Wells come in two record sizes (899 and 821 bytes), which may be the tier; knowing which of your wells are upgraded would settle it.
+  - [ ] **Crop fields, pastures and graveyards.** Their records store a list of tiles instead of a position.
+  - [ ] **Roads and bridges.** Roads are stored as splines (`splineRoadContainer`).
+  - [ ] **Generic decorations.** Named decorations (statues, urns, flag and festival poles, ornamental trees) import. Records with the plain class `Decorations` (gardens, plazas and so on) need their exact type found.
+  - [ ] **Two-tile gates.** 6 gates are centered as if they were two tiles wide; they import as 1×1.
+  - [ ] **Raider guard towers.** Their records (`raiderGuardTower0`) use a different layout and aren't shown yet.
+- [ ] **Update the building catalog to game v1.1.** The Academy, Book Binder, Crypt, Treasury, Storage Depot and Temporary Shelter are now in the catalog, but without desirability values. The Pharmacy hasn't appeared in either save yet. Add missing values in [`src/data/buildings.ts`](src/data/buildings.ts).
 - [ ] **Support terrain flattening.** The game lets you flatten steep ground so you can build on it. The planner needs a way to mark tiles as flattened, so they no longer block placement, and to save that with the plan.
 - [ ] **Update the house upgrade desirability requirements to the current game values.** The thresholds (30%, 65%, 85%, and 100% for the custom Estate) and residents per level live in [`src/data/houses.ts`](src/data/houses.ts).
 - [ ] **Add upgrade and downgrade buttons to a building's details panel.** They should appear only for buildings that have an upgrade path, such as Market ↔ Market Square, Basic Well ↔ Improved Well or Small Park ↔ Small Paved Park. Swapping a building should keep its position and rotation, and it should be undoable. This needs upgrade links added to the catalog in [`src/data/buildings.ts`](src/data/buildings.ts).
@@ -80,7 +93,7 @@ What the import brings in:
 - **Terrain**
   - Water and steep ground are drawn on a shaded relief and block building placement. The placement preview turns red there, and a message says why.
   - Water is ground below 3 m. Steep ground rises more than 4 m to a neighboring tile.
-- **Your town:** the Town Center and every shelter become planner buildings, so they count toward desirability and population. You can move or delete them like any other building.
+- **Your town:** your buildings become planner buildings at their real position and rotation, so they count toward desirability and population. You can move or delete them like any other building. Crop fields, pastures, graveyards, roads and a few decorations aren't imported yet; the Map panel lists what was left out.
 - **Overlays:** the Map panel toggles each one. All are on by default, and your choices are remembered.
   - **Minerals:** clay, sand, stone, iron, gold and coal, drawn at their real radius and labeled with the amount (∞ for deep deposits).
   - **Forageables:** greens, herbs, roots and willow.
