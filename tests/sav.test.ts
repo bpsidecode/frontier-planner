@@ -144,8 +144,10 @@ describe.skipIf(!realPath)('real save file', () => {
   const buf = realPath ? readFileSync(realPath) : Buffer.alloc(0);
   const map = realPath ? parseSave(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer, 'real.sav') : null!;
 
-  it('parses a 384×384 map with resources', () => {
-    expect(map.size).toBe(384);
+  it('parses the map with resources, all markers inside the grid', () => {
+    expect([256, 384]).toContain(map.size);
+    const inside = (p: { x: number; y: number }) => p.x >= 0 && p.y >= 0 && p.x <= map.size && p.y <= map.size;
+    for (const list of [map.minerals, map.forageables, map.enemies, map.ruins, map.buildings, map.spawns]) expect(list.every(inside)).toBe(true);
     const count = (k: string) => map.minerals.filter((m) => m.kind === k).length;
     console.log('minerals', ['clay', 'sand', 'stone', 'iron', 'gold', 'coal'].map((k) => `${k}:${count(k)}`).join(' '));
     console.log('forageables', map.forageables.length, 'spawns', map.spawns.length, 'enemies', map.enemies.length, 'ruins', map.ruins.length, 'bonus', map.fertilityBonus.length);

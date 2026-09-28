@@ -639,7 +639,7 @@ saveInput.addEventListener('change', async () => {
     const { plan: nextPlan, townCenters, houses, skipped } = importSaveBuildings(nextMap);
     setMapAndPlan(nextMap, nextPlan);
     const parts = [`Imported ${nextMap.size}×${nextMap.size} map`];
-    if (townCenters || houses) parts.push(`${townCenters} Town Center, ${houses} houses`);
+    if (townCenters || houses) parts.push(`${townCenters} Town Center, ${houses} house${houses === 1 ? '' : 's'}`);
     if (skipped) parts.push(`${skipped} overlapping buildings skipped`);
     if (!isSupportedVersion(nextMap.version)) parts.push(`save version ${nextMap.version} is older than v1.1.0 and may be incomplete`);
     toast(parts.join(' · '));

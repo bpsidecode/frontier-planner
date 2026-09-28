@@ -38,6 +38,8 @@ export interface SpawnArea {
   x: number;
   y: number;
   size: number;
+  /** True for a roaming herd's current location rather than a fixed spawn area (boars have none). */
+  herd?: boolean;
 }
 export interface FertilityBonus {
   x: number;

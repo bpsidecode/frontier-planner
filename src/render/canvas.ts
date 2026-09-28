@@ -275,7 +275,7 @@ export class Renderer {
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.fillStyle = col;
-        ctx.fillText(`${a.kind[0].toUpperCase()}${a.kind.slice(1)} spawn`, p.x + 4, p.y + 3);
+        ctx.fillText(`${a.kind[0].toUpperCase()}${a.kind.slice(1)} ${a.herd ? 'herd' : 'spawn'}`, p.x + 4, p.y + 3);
       }
     }
 

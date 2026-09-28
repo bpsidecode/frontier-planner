@@ -29,13 +29,13 @@ Things to confirm in the game and correct where needed:
 - [ ] **Check whether houses have a starting desirability.** The planner assumes houses start at 0%. If the game gives a base amount, add it in `evaluateHouses` in [`src/model/houses.ts`](src/model/houses.ts).
 - [ ] **Decide whether Extravagant decorations need their own entries.** They aren't listed separately, because the wiki says they behave exactly like their base versions.
 - [x] **Check the imported map's orientation against the in-game map.** Confirmed correct. The planner mirrors the game's x axis, as [ff-game-map](https://github.com/mikh-abc/ff-game-map) does, so lakes and your town should appear where they are in the game.
-- [ ] **Check the terrain thresholds.** Both were calibrated on one save and live in [`src/model/terrain.ts`](src/model/terrain.ts).
-  - [ ] Water is ground below 3 m (`WATER_BELOW_M`).
+- [x] **Check the terrain thresholds.** Both were calibrated on two saves and live in [`src/model/terrain.ts`](src/model/terrain.ts).
+  - [x] Water is ground below 3 m (`WATER_BELOW_M`). Confirmed, and it holds on the alpine map too: its lakes sit at −7 m.
   - [x] Steep, unbuildable ground rises more than 4 m per tile (`STEEP_M_PER_TILE`). Confirmed it matches the game. If the game lets you build somewhere the planner blocks, raise it. If the planner allows spots the game refuses, lower it.
 - [ ] **Decide which fertility layer to show.** The Fertility view uses the save's environmental fertility, as ff-game-map does. The save also has a current-fertility layer, which drops as fields are farmed.
 - [ ] **Decide whether to show more forageables.** The save also lists berries, nuts, mushrooms and eggs. Adding them is a line each in `src/import/sav.ts` and `src/data/overlays.ts`.
-- [ ] **Check boar spawns.** This save has no boar spawn areas; boars roam freely. The Boar toggle will fill in for saves that have them.
-- [ ] **Import all buildings from a save, not just houses and the Town Center.** Only `TownCenter` and `Shelter` records are recognized today (see `TYPE` in [`src/import/sav.ts`](src/import/sav.ts)). The other buildings' record ids and layouts still need to be found and mapped to planner building types, including their rotation and variable sizes.
+- [x] **Check boar spawns.** In v1.1 saves boars never have a spawn area (their area key is −1 on every boar in two different saves). The Boar toggle instead shows each herd's current location, grouping boars within 40 m of each other.
+- [ ] **Import all buildings from a save, not just houses and the Town Center.** Only `TownCenter` and `Shelter` records are recognized today (see `TYPE` in [`src/import/sav.ts`](src/import/sav.ts)). Other buildings have their own record ids, but each record's name identifies the building (`hunterBuilding0`, `well0`, `supplyWagon0`), and the hunter's cabin and well use the same position layout as the Town Center, so mapping names to planner types looks straightforward. Rotation and variable sizes still need to be found. Raider guard towers (`raiderGuardTower0`) use a different layout and aren't shown yet.
 - [ ] **Update the building catalog to game v1.1.** Some buildings are missing, such as the Academy, Book Binder and Pharmacy. Add them with their sizes and desirability in [`src/data/buildings.ts`](src/data/buildings.ts).
 - [ ] **Support terrain flattening.** The game lets you flatten steep ground so you can build on it. The planner needs a way to mark tiles as flattened, so they no longer block placement, and to save that with the plan.
 - [ ] **Update the house upgrade desirability requirements to the current game values.** The thresholds (30%, 65%, 85%, and 100% for the custom Estate) and residents per level live in [`src/data/houses.ts`](src/data/houses.ts).
@@ -93,7 +93,7 @@ What the import brings in:
 
 The map is saved in the browser with the plan, about 1 MB. **Export** includes the map, so an exported plan file is self-contained. **Remove map** in the Map panel returns to a blank 100×100 plan.
 
-The save parser is a TypeScript port of the relevant parts of [mikh-abc/ff-game-map](https://github.com/mikh-abc/ff-game-map) (Apache-2.0). It's been tested on a v1.1.2a save. The spawn-area table is located by scanning, because the herd records in front of it changed shape since that project was written.
+The save parser is a TypeScript port of the relevant parts of [mikh-abc/ff-game-map](https://github.com/mikh-abc/ff-game-map) (Apache-2.0). It's been tested on two v1.1.2a saves: a 384×384 map and a smaller 256×256 alpine map. The spawn-area table is located by scanning, because the herd records in front of it changed shape since that project was written.
 
 ## How desirability is calculated
 

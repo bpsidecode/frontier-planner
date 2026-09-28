@@ -30,6 +30,7 @@ export const TYPE = {
   RaiderCamp: 1974594303,
   Raider: 545559295,
   BatteringRam: 2094352639,
+  Boar: 3005595647,
   TownCenter: 3556611327,
   Shelter: 2831428095,
   RelicExtraction: 2012388863,
@@ -38,6 +39,8 @@ export const TYPE = {
 
 const ITEM_FILLER = 417;
 const SPAWN_AREA_M = 64;
+/** Boars closer than this (meters) to another boar belong to the same herd. */
+const HERD_LINK_M = 40;
 /** AgricultureInfo::DataType indexes; 12 floats per cell. */
 const AGRI_LAYERS = 12;
 const AGRI_ENV_FERTILITY = 0;
@@ -350,6 +353,26 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
     }
   }
 
+  // Boars have no spawn area in v1.1 saves (their area key is -1); they roam in small herds.
+  // Show each herd's current location as a spawn-sized square so boar hunting grounds still appear.
+  const boars: { x: number; z: number }[] = [];
+  for (const pos of all(TYPE.Boar)) {
+    try {
+      const r = at(pos);
+      r.skip(5);
+      boars.push(r.point());
+    } catch {
+      /* skip */
+    }
+  }
+  for (const herd of clusterPoints(boars, HERD_LINK_M)) {
+    const cx = herd.reduce((s, p) => s + p.x, 0) / herd.length;
+    const cz = herd.reduce((s, p) => s + p.z, 0) / herd.length;
+    const c = toTile({ x: cx, z: cz });
+    const size = SPAWN_AREA_M / cellM;
+    spawns.push({ kind: 'boar', x: c.x - size / 2, y: c.y - size / 2, size, herd: true });
+  }
+
   // --- enemies
   const enemies: Point<EnemyKind>[] = [];
   const pushAll = (id: number, kind: EnemyKind, read: (r: Reader) => { x: number; z: number }) => {
@@ -411,6 +434,18 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
     fertilityBonus,
     buildings,
   };
+}
+
+/** Single-link clustering: points within `linkM` of any member join the same group. */
+function clusterPoints<P extends { x: number; z: number }>(points: P[], linkM: number): P[][] {
+  const groups: P[][] = [];
+  for (const p of points) {
+    const hits = groups.filter((g) => g.some((q) => Math.hypot(p.x - q.x, p.z - q.z) < linkM));
+    const merged = [p, ...hits.flat()];
+    for (const h of hits) groups.splice(groups.indexOf(h), 1);
+    groups.push(merged);
+  }
+  return groups;
 }
 
 /** The repo refuses saves older than v1.1.0; we only warn. */

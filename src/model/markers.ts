@@ -52,7 +52,8 @@ export function markersAt(map: MapData, visible: Set<string>, x: number, y: numb
   out.push(...forage);
   for (const s of map.spawns) {
     const key = `spawn:${s.kind}`;
-    if (visible.has(key) && x >= s.x && x < s.x + s.size && y >= s.y && y < s.y + s.size) out.push(SINGULAR[key]);
+    if (visible.has(key) && x >= s.x && x < s.x + s.size && y >= s.y && y < s.y + s.size)
+      out.push(s.herd ? `${SINGULAR[key].replace(' spawn area', '')} herd (current location)` : SINGULAR[key]);
   }
   return out;
 }
