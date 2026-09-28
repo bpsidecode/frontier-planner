@@ -175,8 +175,8 @@ describe.skipIf(!realPath)('real save file', () => {
     // A handful of buildings stand right against each other in real towns; a few one-tile clashes are expected.
     const count = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a + b, 0);
     expect(count(overlapping)).toBeLessThanOrEqual(5);
-    // Some gates are two tiles wide (centered on a whole tile); every other building fits its catalog size.
-    expect(Object.keys(sizeMismatch).filter((k) => k !== 'palisade-gate')).toEqual([]);
+    // Every building's center fits its catalog size (wide gates are detected from their offsets).
+    expect(sizeMismatch).toEqual({});
     // Walls and gates can run to the water's edge; every other building must stand on land.
     for (const b of plan.buildings.filter((x) => !x.typeId.startsWith('palisade-'))) {
       const f = footprint(b);

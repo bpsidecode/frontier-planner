@@ -34,6 +34,7 @@ export const TYPE = {
   Shelter: 2831428095,
   RelicExtraction: 2012388863,
   SalvagingSite: 117926143,
+  Guids: 4058971987,
 } as const;
 
 const ITEM_FILLER = 417;
@@ -159,6 +160,30 @@ export const BUILDING_CLASSES: Record<string, string> = {
   WorkCamp: 'work-camp',
 };
 
+/**
+ * Prefab ids of specific building variants, which override the class mapping. Upgrades share a class
+ * with their base building (a Market Square is a "MarketBuilding"), so the prefab is what tells them
+ * apart. Ids are stable across saves; these were labeled from side-by-side test builds in a v1.1.2a save.
+ */
+export const PREFAB_TYPES: Record<string, string> = {
+  '22c84713-ff1b-4f89-81f2-f3d62baa8b4e': 'basic-well',
+  'dc035044-3e19-4053-a0c7-d5e9c16ba477': 'improved-well',
+  '16229e85-cc53-4931-abb6-b5ae358094b0': 'market',
+  'b08516c8-9111-473f-b9f6-8c79aba707a5': 'market-square',
+  '4d51c83c-781c-47a7-b309-339cbf67c093': 'lookout-tower',
+  '423285e9-6276-4e4d-a846-351845b68717': 'watch-tower',
+  'c6a2916c-9ece-41a7-bec8-9b8db1e2a96e': 'battlement-tower',
+  '8dde25cb-aec6-40ba-8b78-9e42f581b40e': 'palisade-gate',
+  'e3d86a52-a9f6-4d6d-a7ef-e9ba0ccf04c3': 'palisade-gate',
+  'cd1960fb-02eb-4a82-8449-399507a526a6': 'wide-gate',
+  'c49a87dd-0e3c-417d-94fc-777e734d8224': 'small-park',
+  'bc6f5552-1052-4118-8edb-ef2812825f70': 'small-paved-park',
+  '27677ae3-da7a-48cf-ad13-b119587361f9': 'medium-plaza',
+  'c59ab465-75e3-493d-bc62-938b1717735c': 'medium-brick-plaza',
+  // Saved with class "Barracks", but it's a separate building.
+  '5eaaad6d-8751-453a-9af7-04093e35f1dd': 'cavalry-stable',
+};
+
 /** Save records (by name prefix) that are player-built but not imported yet. */
 const NOT_IMPORTED: Record<string, string> = {
   cropField: 'Crop fields',
@@ -220,6 +245,8 @@ class Reader {
 interface Span {
   /** Record name without its trailing index, e.g. "hunterBuilding". */
   name: string;
+  /** The record name's trailing index (hunterBuilding3 → 3), or -1. */
+  index: number;
   /** First payload byte (after the type id and one pad byte). */
   start: number;
   /** One past the record's last byte. */
@@ -232,13 +259,15 @@ export function readRecordSpans(buf: ArrayBuffer): Map<number, Span[]> {
   const table = new Map<number, Span[]>();
   while (r.pos < r.length) {
     r.skip(1); // component type
-    const name = r.str().replace(/\d+$/, '');
+    const full = r.str();
+    const name = full.replace(/\d+$/, '');
+    const index = name === full ? -1 : Number(full.slice(name.length));
     const size = r.u32();
     const start = r.pos;
     if (size < 4 || start + size > r.length) throw new SaveFormatError('This doesn’t look like a Farthest Frontier save');
     const id = r.u32();
     const list = table.get(id) ?? [];
-    list.push({ name, start: start + 5, end: start + size });
+    list.push({ name, index, start: start + 5, end: start + size });
     table.set(id, list);
     r.pos = start + size;
   }
@@ -506,6 +535,20 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
 
   // --- player buildings: every record whose header decodes to a known building class.
   // Header: u32 id, u8 hasParent (+41 bytes), 1 byte, position, rotation quaternion, scale, class name.
+  // "<name>Guids" records list each instance's prefab id, in record-index order.
+  const prefabs = new Map<string, string[]>();
+  for (const span of spans.get(TYPE.Guids) ?? []) {
+    try {
+      const r = at(span.start + 2);
+      const n = r.u32();
+      const ids: string[] = [];
+      for (let k = 0; k < n; k++) ids.push(r.str());
+      prefabs.set(span.name.replace(/Guids$/, ''), ids);
+    } catch {
+      /* skip */
+    }
+  }
+
   const buildings: SaveBuilding[] = [];
   const notImported: Record<string, number> = {};
   for (const list of spans.values())
@@ -530,14 +573,15 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
         const qw = r.f32();
         r.skip(12); // scale
         const cls = r.str();
-        const typeId = BUILDING_CLASSES[cls];
+        const prefab = prefabs.get(span.name)?.[span.index];
+        const typeId = (prefab && PREFAB_TYPES[prefab]) || BUILDING_CLASSES[cls];
         if (!typeId) {
           if (cls === 'Decorations') notImported['Other decorations'] = (notImported['Other decorations'] ?? 0) + 1;
           continue;
         }
         if (!(p.x >= 0 && p.x <= worldM && p.z >= 0 && p.z <= worldM)) continue;
         const yaw = 2 * Math.atan2(qy, qw);
-        buildings.push({ typeId, ...toTile(p), rot: ((Math.round(yaw / (Math.PI / 2)) % 4) + 4) % 4 });
+        buildings.push({ typeId, ...toTile(p), rot: ((Math.round(yaw / (Math.PI / 2)) % 4) + 4) % 4, ...(prefab ? { prefab } : {}) });
       } catch {
         /* not a building record */
       }

@@ -77,7 +77,7 @@ describe('computeField', () => {
 
 describe('plan', () => {
   it('rotation swaps the footprint', () => {
-    const lib = P('library', 10, 10, 1);
+    const lib = P('glassmaker', 10, 10, 1);
     expect(footprint(lib)).toEqual({ x: 10, y: 10, w: 4, h: 3 });
   });
 
@@ -91,7 +91,7 @@ describe('plan', () => {
 
   it('moves and rotates around the center', () => {
     const plan = new Plan();
-    const lib = plan.add({ typeId: 'library', x: 10, y: 10, rot: 0 })!; // 3x4, center (11.5, 12)
+    const lib = plan.add({ typeId: 'glassmaker', x: 10, y: 10, rot: 0 })!; // 3x4, center (11.5, 12)
     expect(plan.rotate(lib.id)).toBe(true);
     expect(footprint(lib)).toEqual({ x: 10, y: 11, w: 4, h: 3 });
     expect(center(lib).cx).toBeCloseTo(12);
@@ -119,10 +119,10 @@ describe('house levels', () => {
     [0, 'Shelter'],
     [29.99, 'Shelter'],
     [30, 'Homestead'],
-    [64.9, 'Homestead'],
-    [65, 'Large House'],
-    [84.9, 'Large House'],
-    [85, 'Manor'],
+    [59.9, 'Homestead'],
+    [60, 'Large House'],
+    [79.9, 'Large House'],
+    [80, 'Manor'],
     [99.9, 'Manor'],
     [100, 'Estate'],
     [140, 'Estate'],

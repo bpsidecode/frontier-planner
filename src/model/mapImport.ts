@@ -12,6 +12,12 @@ export interface ImportReport {
   sizeMismatch: Record<string, number>;
 }
 
+/**
+ * Buildings that share a class in the save but come in more than one footprint. When the center's
+ * offsets don't fit the first type, the alternative is tried (wide gates are two tiles across).
+ */
+const SIZE_VARIANTS: Record<string, string> = { 'palisade-gate': 'wide-gate' };
+
 /** Odd footprint sides center on a half tile, even sides on a whole tile. */
 const isHalf = (v: number) => Math.abs((v % 1) - 0.5) < 0.25;
 
@@ -32,22 +38,26 @@ export function importSaveBuildings(map: MapData): ImportReport {
     .sort((a, b) => area(b.typeId) - area(a.typeId));
 
   for (const b of ordered) {
-    const t = getType(b.typeId);
-    const fits = (rot: number) => {
+    const fits = (typeId: string, rot: number) => {
+      const t = getType(typeId);
       const s = rotatedSize(t.w, t.h, rot);
       return (s.w % 2 === 1) === isHalf(b.x) && (s.h % 2 === 1) === isHalf(b.y);
     };
+    let typeId = b.typeId;
     let rot = b.rot % 2;
-    if (!fits(rot)) {
-      if (fits(1 - rot)) rot = 1 - rot;
-      else bump(report.sizeMismatch, b.typeId);
+    const variant = SIZE_VARIANTS[typeId];
+    if (!fits(typeId, rot) && !fits(typeId, 1 - rot) && variant) typeId = variant;
+    if (!fits(typeId, rot)) {
+      if (fits(typeId, 1 - rot)) rot = 1 - rot;
+      else bump(report.sizeMismatch, typeId);
     }
+    const t = getType(typeId);
     const s = rotatedSize(t.w, t.h, rot);
     const placed = plan.add(
-      { typeId: b.typeId, x: Math.round(b.x - s.w / 2), y: Math.round(b.y - s.h / 2), rot },
+      { typeId, x: Math.round(b.x - s.w / 2), y: Math.round(b.y - s.h / 2), rot },
       { ignoreTerrain: true },
     );
-    bump(placed ? report.imported : report.overlapping, b.typeId);
+    bump(placed ? report.imported : report.overlapping, typeId);
   }
   return report;
 }

@@ -1,7 +1,7 @@
 // Building catalog for Farthest Frontier.
 // Sizes: https://farthestfrontier.wiki/wiki/Buildings
 // Desirability: https://farthestfrontier.wiki/wiki/Desirability (updated for game v1.1.0)
-// Entries flagged `sizeUnverified` have no footprint listed on the wiki; the size is a best guess.
+// Entries flagged `sizeUnverified` are best guesses; the rest are from the wiki or confirmed in-game (v1.1).
 
 export type Category =
   | 'Housing'
@@ -84,7 +84,7 @@ add('Amenities', 'Market', 4, 4, [0.08, 80, 'MarketBuilding']);
 add('Amenities', 'Market Square', 4, 4, [0.1, 90, 'MarketBuilding']);
 add('Amenities', "Healer's House", 3, 3, [0.04, 150, 'HealersHouse']);
 add('Amenities', 'Hospital', 3, 3, [0.08, 200, 'HealersHouse']);
-add('Amenities', 'Library', 3, 4, [0.1, 150, 'Library']);
+add('Amenities', 'Library', 4, 3, [0.1, 150, 'Library']);
 add('Amenities', 'School', 3, 4, [0.08, 180, 'School']);
 add('Amenities', 'Pub', 2, 3, [0.04, 150, 'Pub']);
 add('Amenities', 'Shrine', 3, 3, [0.06, 120, 'ShrineMedium']);
@@ -96,13 +96,13 @@ add('Amenities', 'Grand Theater', 5, 5, [0.08, 400, 'Theater']);
 add('Amenities', 'Festival Pole', 4, 4, [0.04, 180, 'FestivalPole']);
 add('Amenities', 'Paved Festival Pole', 4, 4, [0.08, 180, 'FestivalPole']);
 add('Amenities', 'Apothecary Shop', 2, 3);
-// Added in game v1.1 and not on the wiki. Sizes fit the save's building centers (odd/even sides) and don't
-// collide with neighbouring buildings in a real town, but the exact numbers are unconfirmed.
-add('Amenities', 'Academy', 3, 4, null, unverified);
-add('Amenities', 'Book Binder', 2, 3, null, unverified);
-add('Amenities', 'Crypt', 3, 3, null, unverified);
+// Added in game v1.1 and not on the wiki. Academy, Book Binder and Crypt sizes are confirmed in-game;
+// the Treasury's fits the save's building centers but is unconfirmed.
+add('Amenities', 'Academy', 4, 5);
+add('Amenities', 'Book Binder', 2, 3);
+add('Amenities', 'Crypt', 3, 3);
 add('Amenities', 'Treasury', 3, 4, null, unverified);
-add('Amenities', 'Guild Hall', 4, 5);
+add('Amenities', 'Guild Hall', 5, 4);
 add('Amenities', 'Rat Catcher', 2, 2);
 add('Amenities', 'Trading Post', 4, 5);
 add('Amenities', 'Trading Center', 4, 5);
@@ -118,16 +118,16 @@ add('Decorations', 'Trellis', 1, 2, [0.03, 30, 'Decorations'], unverified);
 add('Decorations', 'Large Statue', 3, 4, [0.12, 200, 'LargeStatue']);
 add('Decorations', 'Medium Statue', 2, 3, [0.08, 150, 'MediumStatue']);
 add('Decorations', 'Small Statue', 1, 1, [0.05, 100, 'SmallStatue']);
-add('Decorations', 'Gazebo Plaza', 3, 3, [0.05, 100, 'Gazebo'], unverified);
+add('Decorations', 'Gazebo Plaza', 4, 4, [0.05, 100, 'Gazebo']);
 add('Decorations', 'Hedge Garden', 3, 3, [0.04, 100, 'Hedge'], unverified);
-add('Decorations', 'Grand Plaza', 4, 4, [0.06, 60], unverified);
+add('Decorations', 'Grand Plaza', 5, 5, [0.06, 60]);
 add('Decorations', 'Flag Pole', 2, 2, [0.02, 60, 'Flagpole']);
 add('Decorations', 'Paved Flag Pole', 2, 2, [0.03, 60]);
 add('Decorations', 'Medium Brick Plaza', 2, 2, [0.06, 40]);
 add('Decorations', 'Medium Plaza', 2, 2, [0.04, 40]);
 add('Decorations', 'Medium Paved Garden', 2, 2, [0.08, 36]);
 add('Decorations', 'Medium Garden', 2, 2, [0.05, 36]);
-add('Decorations', 'Rose Garden', 2, 2, [0.05, 36], unverified);
+add('Decorations', 'Rose Garden', 2, 3, [0.05, 36]);
 add('Decorations', 'Garden Path', 1, 3, [0.06, 36]);
 add('Decorations', 'Garden Trail', 1, 3, [0.04, 36]);
 add('Decorations', 'Ornamental Tree', 2, 2, [0.04, 48]);
@@ -149,7 +149,7 @@ add('Food', 'Pastry Shop', 2, 3, [0.08, 120, 'Bakery']);
 add('Food', 'Barn', 4, 6, [-0.3, 50, 'Barn']);
 add('Food', 'Large Barn', 4, 6, [-0.3, 50, 'Barn']);
 add('Food', 'Goat Barn', 3, 4, [-0.3, 50, 'GoatBarn']);
-add('Food', 'Large Goat Barn', 3, 4, [-0.3, 50], unverified);
+add('Food', 'Large Goat Barn', 4, 3, [-0.3, 50]);
 add('Food', 'Chicken Coop', 2, 4, [-0.1, 30, 'ChickenCoop']);
 add('Food', 'Smokehouse', 2, 2, [-0.15, 40, 'SmokeHouse']);
 add('Food', 'Windmill', 3, 3, [-0.15, 50]);
@@ -170,28 +170,28 @@ add('Resources', 'Charcoal Kiln', 3, 4, [-0.4, 65, 'CharcoalKiln']);
 add('Resources', 'Glassmaker', 3, 4, [-0.3, 60, 'Glassmaker', true]);
 add('Resources', 'Stable', 3, 4, [-0.3, 50, 'Stable', true]);
 add('Resources', 'Tannery', 3, 3, [-0.3, 75]);
-add('Resources', 'Paper Mill', 4, 4, [-0.3, 75], unverified);
-add('Resources', 'Coal Mine', 4, 4, [-0.25, 50, 'CoalMine'], unverified);
-add('Resources', 'Deep Coal Mine', 3, 3, [-0.25, 65, 'CoalMine'], unverified);
-add('Resources', 'Gold Mine', 4, 4, [-0.25, 50, 'GoldMine'], unverified);
-add('Resources', 'Deep Gold Mine', 3, 3, [-0.25, 50, 'GoldMine'], unverified);
-add('Resources', 'Iron Mine', 4, 4, [-0.2, 50, 'IronMine'], unverified);
-add('Resources', 'Deep Iron Mine', 3, 3, [-0.25, 50, 'IronMine'], unverified);
+add('Resources', 'Paper Mill', 4, 4, [-0.3, 75]);
+add('Resources', 'Coal Mine', 2, 2, [-0.25, 50, 'CoalMine']);
+add('Resources', 'Deep Coal Mine', 3, 3, [-0.25, 65, 'CoalMine']);
+add('Resources', 'Gold Mine', 2, 2, [-0.25, 50, 'GoldMine']);
+add('Resources', 'Deep Gold Mine', 3, 3, [-0.25, 50, 'GoldMine']);
+add('Resources', 'Iron Mine', 2, 2, [-0.2, 50, 'IronMine']);
+add('Resources', 'Deep Iron Mine', 3, 3, [-0.25, 50, 'IronMine']);
 add('Resources', 'Blacksmith Forge', 3, 4, [-0.2, 50, 'BlacksmithForge']);
 add('Resources', 'Blacksmith Workshop', 3, 4, [-0.2, 50, 'BlacksmithForge']);
 add('Resources', 'Foundry', 3, 4, [-0.2, 50, 'Foundry']);
 add('Resources', 'Smeltery', 3, 4, [-0.2, 50, 'Foundry']);
 add('Resources', 'Brickyard', 4, 5, [-0.2, 40, 'Brickyard']);
-add('Resources', 'Quarry', 3, 4, [-0.2, 50, 'StonePit'], unverified);
+add('Resources', 'Quarry', 5, 4, [-0.2, 50, 'StonePit']);
 add('Resources', 'Saw Pit', 3, 4, [-0.2, 65]);
 add('Resources', 'Saw Mill', 3, 4, [-0.2, 65]);
 add('Resources', 'Soap Shop', 3, 4, [-0.15, 45, 'SoapShop', true]);
 add('Resources', 'Firewood Splitter', 2, 3, [-0.15, 35, 'WoodCutterBuilding']);
 add('Resources', 'Firewood Splitter Workshop', 2, 3, [-0.15, 35, 'WoodCutterBuilding']);
-add('Resources', 'Deep Clay Mine', 3, 3, [-0.1, 40, 'ClayPit'], unverified);
-add('Resources', 'Deep Sand Mine', 3, 3, [-0.1, 40, 'SandPit'], unverified);
+add('Resources', 'Deep Clay Mine', 3, 3, [-0.1, 40, 'ClayPit']);
+add('Resources', 'Deep Sand Mine', 3, 3, [-0.1, 40, 'SandPit']);
 add('Resources', 'Work Camp', 3, 3, [-0.05, 50, 'WorkCamp']);
-add('Resources', 'Forester Camp', 3, 3, [-0.05, 50, 'WorkCamp'], unverified);
+add('Resources', 'Forester Camp', 3, 3, [-0.05, 50, 'WorkCamp']);
 add('Resources', 'Clay Pit', 3, 3);
 add('Resources', 'Sand Pit', 3, 3);
 add('Resources', 'Apiary', 1, 1);
@@ -203,7 +203,7 @@ add('Resources', 'Candle Shop', 2, 3);
 add('Resources', 'Cobbler Shop', 2, 3);
 add('Resources', 'Fletcher Building', 2, 3);
 add('Resources', 'Fletcher Workshop', 2, 3);
-add('Resources', 'Furniture Workshop', 3, 5);
+add('Resources', 'Furniture Workshop', 5, 3);
 add('Resources', 'Potter Building', 3, 4);
 add('Resources', 'Weaver Building', 3, 4);
 
@@ -218,7 +218,7 @@ add('Storage', 'Root Cellar', 2, 3);
 add('Storage', 'Brick Root Cellar', 2, 3);
 add('Storage', 'Cooper', 3, 3);
 add('Storage', 'Wagon Shop', 3, 3);
-add('Storage', 'Storage Depot', 2, 3, null, unverified);
+add('Storage', 'Storage Depot', 2, 3);
 
 // Defenses
 add('Defenses', 'Barracks', 4, 6);
@@ -226,8 +226,10 @@ add('Defenses', 'Fort', 4, 6);
 add('Defenses', 'Cavalry Stable', 4, 5);
 add('Defenses', 'Lookout Tower', 1, 1);
 add('Defenses', 'Watch Tower', 1, 1);
+add('Defenses', 'Battlement Tower', 1, 1);
 add('Defenses', 'Palisade Wall', 1, 1);
 add('Defenses', 'Palisade Gate', 1, 1);
+add('Defenses', 'Wide Gate', 2, 1);
 add('Defenses', 'Fortified Wall', 1, 1);
 add('Defenses', 'Fortified Gate', 1, 1);
 

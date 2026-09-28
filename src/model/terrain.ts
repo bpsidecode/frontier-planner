@@ -55,6 +55,8 @@ export interface SaveBuilding {
   y: number;
   /** Game rotation in quarter turns (0–3). */
   rot: number;
+  /** The game's prefab id for this building, which identifies its exact variant (tier). */
+  prefab?: string;
 }
 
 export interface MapData {

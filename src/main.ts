@@ -724,7 +724,7 @@ function buildLegend() {
     stops.push(`rgb(${r},${g},${b}) ${((i / 30) * 100).toFixed(1)}%`);
   }
   $('.legend-bar').style.background = `linear-gradient(to right, ${stops.join(',')})`;
-  const labels = [-50, -25, 0, 30, 65, 100];
+  const labels = [-50, -25, 0, 30, 60, 100];
   $('.legend-labels').innerHTML = labels
     .map((l) => `<span style="left:${((l / 100 - RED_AT) / span) * 100}%">${l > 0 ? '+' : ''}${l}%</span>`)
     .join('');
