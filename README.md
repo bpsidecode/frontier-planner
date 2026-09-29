@@ -17,11 +17,12 @@ Things to confirm in the game and correct where needed:
   - [ ] Treasury (3×4). This size fits where the game centers it in a save, but it isn't confirmed.
   - [ ] Hedge Garden (3×3), Topiary Garden (3×3)
   - [ ] Trellis (1×2)
-  - [ ] Rose Bush, Low Brush, Tall Brush (1×1)
+  - [ ] Civic Monument, Military Monument (imported as 5×5). The save shows both sides are odd.
+  - [x] Rose Bush, Low Brush, Tall Brush (1×1), confirmed by the decoration test row
   - [ ] Guard towers are imported as the 1×1 Lookout Tower. They sit on wall tiles, and 1×1 is the only size that doesn't collide with the walls around them.
 - [x] **Confirm building sizes in-game (v1.1).** Confirmed and updated in the catalog:
   - [x] Academy 4×5, Book Binder 2×3, Crypt 3×3, Storage Depot 2×3
-  - [x] Library 4×3, Theater 5×5, Temple 5×5, Guild Hall 5×4, Apothecary 2×3, Barracks 4×6
+  - [x] Library 4×3, Theater 5×5, Temple 5×5, Guild Hall 5×4, Apothecary 2×3, Barracks 6×4
   - [x] Coal, Iron and Gold Mines 2×2 (the wiki says 3×3); Deep Mines 3×3; Clay and Sand Pits 3×3; Quarry 5×4
   - [x] Paper Mill 4×4, Furniture Workshop 5×3, Forester Camp 3×3, Large Goat Barn 4×3
   - [x] Rose Garden 2×3, Gazebo Plaza 4×4, Grand Plaza 5×5
@@ -34,27 +35,25 @@ Things to confirm in the game and correct where needed:
 - [ ] **Decide which fertility layer to show.** The Fertility view uses the save's environmental fertility, as ff-game-map does. The save also has a current-fertility layer, which drops as fields are farmed.
 - [ ] **Decide whether to show more forageables.** The save also lists berries, nuts, mushrooms and eggs. Adding them is a line each in `src/import/sav.ts` and `src/data/overlays.ts`.
 - [x] **Check boar spawns.** Boars have no spawn areas in v1.1 saves. They spawn from boar dens, which the save stores in the same record type as wolf dens. The Boar toggle shows boar dens, and the Enemies group shows only wolf dens.
-- [ ] **Import all buildings from a save.** Most are done: 74 building classes map to planner buildings with their position and rotation (`BUILDING_CLASSES` in [`src/import/sav.ts`](src/import/sav.ts)). On the Lametree save that's 1,167 buildings, with 2 skipped because they touch a neighbor. Still to do:
-  - [ ] **Upgrade tiers.** Each building's `…Guids` record stores its prefab id, which identifies the exact variant. Ids are stable across saves and labeled in `PREFAB_TYPES` in [`src/import/sav.ts`](src/import/sav.ts).
-    - [x] Labeled from side-by-side test builds: Basic/Improved Well, Market/Market Square, Small Park/Small Paved Park, Medium Plaza/Medium Brick Plaza, 1×1/wide gate, and the Lookout → Watch → Battlement Tower tiers.
-    - [x] The Cavalry Stable is saved with class `Barracks`; its prefab id tells it apart.
-    - [ ] Variants seen but not labeled yet, which import as the base building: Bakery/Pastry Shop, Healer's House/Hospital, Hunter Cabin/Lodge, Root Cellar/Brick Root Cellar, Stockyard/Large Stockyard, Firewood Splitter/Workshop, Goat Barn/Large Goat Barn, Work Camp (two variants), and 6 generic decoration prefabs. Bakery and Healer's House matter most, since their upgrades double the desirability.
+- [ ] **Import all buildings from a save.** Most are done: building classes and prefab ids map to planner buildings with their position and rotation (`BUILDING_CLASSES` and `PREFAB_TYPES` in [`src/import/sav.ts`](src/import/sav.ts)). On the original Lametree save that's 1,182 buildings, with 2 skipped because they touch a neighbor. Still to do:
+  - [x] **Upgrade tiers and variants.** Each building's `…Guids` record stores its prefab id, which identifies the exact variant. Two side-by-side test saves labeled every building upgrade pair, the Temple and Theater upgrades, all fences and fence gates, and nearly every decoration.
+  - [ ] **Academy → Grand Academy.** The Academy's prefab didn't change between the two test saves, so the Grand Academy's id is still unknown.
+  - [ ] **Two unidentified decorations:** a 1×1 decoration placed between the corner bench plazas and the medium plazas in the test row (prefab `fe6ea4b5…`), and a 2×2 decoration in the original town (prefab `1935626f…`).
+  - [ ] **Which bush is which.** The four bushes were placed as a 2×2 block and are labeled in reading order. All four have the same size and desirability, so a mix-up doesn't change results.
   - [ ] **Crop fields, pastures and graveyards.** Their records store a list of tiles instead of a position.
   - [ ] **Roads and bridges.** Roads are stored as splines (`splineRoadContainer`).
-  - [ ] **Generic decorations.** Named decorations (statues, urns, flag and festival poles, ornamental trees) import. Records with the plain class `Decorations` (gardens, plazas and so on) need their exact type found.
   - [x] **Wide gates.** Gates centered as if two tiles wide import as the 2×1 Wide Gate (6 in the Lametree save).
   - [ ] **Raider guard towers.** Their records (`raiderGuardTower0`) use a different layout and aren't shown yet.
-- [ ] **Update the building catalog to game v1.1.** The Academy, Book Binder, Crypt, Treasury, Storage Depot and Temporary Shelter are now in the catalog, but without desirability values. The Pharmacy hasn't appeared in either save yet. Add missing values in [`src/data/buildings.ts`](src/data/buildings.ts).
+- [ ] **Add desirability values for v1.1 buildings.** The Academy, Book Binder, Crypt, Treasury, Storage Depots, Guild Hall, Forager Garden, the monuments, the bench plazas and Crates and Barrels are in the catalog without desirability values, as they aren't on the wiki. The Pharmacy hasn't appeared in any save yet. Add values in [`src/data/buildings.ts`](src/data/buildings.ts).
 - [ ] **Support terrain flattening.** The game lets you flatten steep ground so you can build on it. The planner needs a way to mark tiles as flattened, so they no longer block placement, and to save that with the plan.
 - [x] **Update the house upgrade desirability requirements to the current game values.** Houses upgrade at 30%, 60%, 80% and 100% (confirmed in-game), set in [`src/data/houses.ts`](src/data/houses.ts).
 - [ ] **Add upgrade and downgrade buttons to a building's details panel.** They should appear only for buildings that have an upgrade path, such as Market ↔ Market Square, Basic Well ↔ Improved Well or Small Park ↔ Small Paved Park. Swapping a building should keep its position and rotation, and it should be undoable. This needs upgrade links added to the catalog in [`src/data/buildings.ts`](src/data/buildings.ts).
-- [ ] **Import every building type.** Known gaps: Gazebo, Guild Hall, Grand Plaza, Stable, Altar (imports as a Shrine), Pastry Shop, Hospital, and most decorations.
-  - Some of these use class names the importer doesn't recognize yet (in the latest save: `GuildHall`, `Stable`, `ApothecaryShop`, `FurnitureWorkshop`). Unrecognized classes are skipped without being listed under "Not imported yet", so the Map panel should list them too.
-  - Upgrades like the Altar, Pastry Shop and Hospital share a class with their base building and need their prefab ids labeled in `PREFAB_TYPES`.
-- [ ] **Check Barracks orientation in-game.** Imported Barracks seem to be turned sideways: they run over existing roads. A 4×6 footprint centers the same way in either orientation, so the importer relies on the save's rotation. If the game's unrotated Barracks is 6×4, the catalog should list it that way.
-- [ ] **Build all buildings and their upgrades side by side in a test save.** This would label every variant's prefab id in one pass, as the wells, markets, parks, plazas, gates and towers were.
+- [x] **Import every building type.** The Gazebo, Guild Hall, Grand Plaza, Stable, Altar, Pastry Shop, Hospital, Apothecary, Furniture Workshop, monuments and decorations now import.
+  - [ ] Unrecognized classes are still skipped without being listed under "Not imported yet"; the Map panel should list them too.
+- [x] **Fix sideways Barracks.** The game's unrotated Barracks is 6×4, not 4×6, as the side-by-side pairs showed: each pair was placed touching, so the gap between centers is the building's width. Barracks, Fort and Barn (all even on both sides, where rotation can't be deduced from the center) now use the game's orientation, as do the Hunter Cabin, Firewood Splitter, Fletcher, Forager, Armory, Blacksmith, Foundry, Stable and Goat Barn.
+- [x] **Build all buildings and their upgrades side by side in a test save.**
 - [ ] **Reflect tech tree improvements,** mainly the ones that raise desirability.
-- [ ] **Tell fences apart from palisade walls.** Fences are saved with the same `Wall` class and currently import as Palisade Walls; their prefab ids should separate them.
+- [x] **Tell fences apart from palisade walls.** Prefab ids separate palisade walls from fences, fieldstone, hedge and wrought iron fences, and their gates. The original Lametree town has 462 palisade wall tiles and 317 fence tiles.
 - [ ] **Long term: write changes back to the `.sav` file.** The goal is to rearrange buildings in the planner and save them back into the game. This needs the full building record format, and it should always write a new file rather than overwrite the original save. ff-game-map's `GameMapChanger.cpp` is a starting point.
 
 ## Features

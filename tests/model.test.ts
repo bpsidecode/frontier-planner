@@ -27,9 +27,9 @@ describe('effectAt', () => {
   });
 
   it('gives constant buildings full value throughout their range', () => {
-    const stable = P('stable', 0, 0); // 3x4, center (1.5, 2), -30%, 50 m
-    expect(effectAt(stable, 1.5, 11.9)).toBeCloseTo(-0.3);
-    expect(effectAt(stable, 1.5, 12.1)).toBe(0);
+    const stable = P('stable', 0, 0); // 4x3, center (2, 1.5), -30%, 50 m
+    expect(effectAt(stable, 2, 11.4)).toBeCloseTo(-0.3);
+    expect(effectAt(stable, 2, 11.6)).toBe(0);
   });
 });
 

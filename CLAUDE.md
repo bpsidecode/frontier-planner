@@ -80,4 +80,4 @@ Replacing the map goes through `setMapAndPlan()`, which also resets history and 
 - **Export:** JSON exports include the map, so an exported file is self-contained.
 - **Size mismatch:** a saved plan whose size doesn't match the loaded map is discarded.
 
-**Building catalog:** `data/buildings.ts` holds each building's footprint and desirability. Entries marked `sizeUnverified` have guessed footprints, and the README's to-do list tracks them.
+**Building catalog:** `data/buildings.ts` holds each building's footprint and desirability. `w×h` is the game's unrotated orientation (measured from side-by-side pairs placed touching in a save); this matters for buildings with two even or two odd sides, whose import rotation comes straight from the save. Entries marked `sizeUnverified` have guessed footprints, and the README's to-do list tracks them.

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { TYPE, parseSave, readRecordTable } from '../src/import/sav';
+import { BUILDING_CLASSES, PREFAB_TYPES, TYPE, parseSave, readRecordTable } from '../src/import/sav';
+import { BUILDING_BY_ID } from '../src/data/buildings';
 import { Terrain, classifyTerrain, deserializeMap, serializeMap } from '../src/model/terrain';
 import { importSaveBuildings } from '../src/model/mapImport';
 import { footprint } from '../src/model/plan';
@@ -134,6 +135,12 @@ describe('save parser (synthetic)', () => {
 
   it('rejects files that are not saves', () => {
     expect(() => parseSave(new Uint8Array([1, 0, 0, 0, 128, 7, 0, 0, 65]).buffer)).toThrow();
+  });
+});
+
+describe('building lookups', () => {
+  it('map every save class and prefab to a catalog building', () => {
+    for (const id of [...Object.values(BUILDING_CLASSES), ...Object.values(PREFAB_TYPES)]) expect(BUILDING_BY_ID[id], id).toBeDefined();
   });
 });
 
