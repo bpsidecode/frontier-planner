@@ -21,9 +21,20 @@ describe('catalog', () => {
       if (!b.upgradeTo) continue;
       expect(BUILDING_BY_ID[b.upgradeTo]).toBeDefined();
       expect(getDowngrade(b.upgradeTo)?.id).toBe(b.id);
+      expect({ w: BUILDING_BY_ID[b.upgradeTo].w, h: BUILDING_BY_ID[b.upgradeTo].h }).toEqual({ w: b.w, h: b.h });
     }
     expect(BUILDING_BY_ID.market.upgradeTo).toBe('market-square');
     expect(BUILDING_BY_ID['basic-well'].upgradeTo).toBe('improved-well');
+    expect(BUILDING_BY_ID['trading-post'].upgradeTo).toBe('trading-center');
+    expect(BUILDING_BY_ID.storehouse.upgradeTo).toBe('warehouse');
+    expect(BUILDING_BY_ID['palisade-wall'].upgradeTo).toBe('fortified-wall');
+    expect(BUILDING_BY_ID['palisade-gate'].upgradeTo).toBe('fortified-gate');
+  });
+
+  it('does not treat mines and deep mines as upgrade pairs', () => {
+    for (const id of ['coal-mine', 'gold-mine', 'iron-mine', 'clay-pit', 'sand-pit']) {
+      expect(BUILDING_BY_ID[id].upgradeTo).toBeUndefined();
+    }
   });
 });
 

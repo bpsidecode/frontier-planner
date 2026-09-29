@@ -84,7 +84,8 @@ const DEPOSIT_KINDS: Record<number, MineralKind> = { 0: 'iron', 1: 'gold', 2: 'c
 
 /**
  * Player buildings: the class name stored in each building record → planner catalog id.
- * Upgrade tiers aren't decoded yet, so upgradable buildings import at their base tier.
+ * Known upgrade tiers are refined below through prefab ids; unknown prefab variants fall back to
+ * the class's base catalog entry.
  */
 export const BUILDING_CLASSES: Record<string, string> = {
   TownCenter: 'town-center',

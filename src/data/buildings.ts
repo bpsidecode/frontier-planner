@@ -264,6 +264,7 @@ const UPGRADE_PATHS: [from: string, to: string][] = [
   ['temple', 'grand-temple'],
   ['theater', 'grand-theater'],
   ['festival-pole', 'paved-festival-pole'],
+  ['trading-post', 'trading-center'],
   ['small-park', 'small-paved-park'],
   ['large-park', 'large-paved-park'],
   ['flag-pole', 'paved-flag-pole'],
@@ -290,9 +291,12 @@ const UPGRADE_PATHS: [from: string, to: string][] = [
   ['stockyard', 'large-stockyard'],
   ['root-cellar', 'brick-root-cellar'],
   ['storage-depot', 'large-storage-depot'],
+  ['storehouse', 'warehouse'],
   ['barracks', 'fort'],
   ['lookout-tower', 'watch-tower'],
   ['watch-tower', 'battlement-tower'],
+  ['palisade-wall', 'fortified-wall'],
+  ['palisade-gate', 'fortified-gate'],
 ];
 
 export const BUILDING_BY_ID: Record<string, BuildingType> = Object.fromEntries(
