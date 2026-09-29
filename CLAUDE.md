@@ -49,7 +49,7 @@ Replacing the map goes through `setMapAndPlan()`, which also resets history and 
 - Effect: `value × (1 − 0.5·d/range)` within range, and 0 beyond it. "Const" buildings give their full value everywhere in range.
 - Buildings that share a tag don't stack; only the one with the largest absolute effect counts at each point.
 - `computeField` (the whole grid) and `pointDesirability`/`breakdown` (a single point) must agree, and a test checks that they do.
-- A house's level comes from the desirability at the house's center. The thresholds (30/60/80/100%) are in `data/houses.ts` and confirmed in-game; the Estate level's name and 10 residents were requested by the user, not taken from the wiki.
+- A house's level comes from the desirability at the house's center. The thresholds (30/60/80/100%) and tier-5 Mansion name are confirmed in-game. The Mansion's 10 residents were requested by the user, not taken from the wiki.
 
 **Save import (`import/sav.ts`)** is a TypeScript port of parts of [mikh-abc/ff-game-map](https://github.com/mikh-abc/ff-game-map).
 - **Record format:** a save is a flat list of records: a `u8` type, a `u8`-length-prefixed name, a `u32` size, a `u32` type id, then one pad byte. The type ids come from that repo's `StaticData.cpp`.

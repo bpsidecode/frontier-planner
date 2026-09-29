@@ -158,8 +158,8 @@ describe('house levels', () => {
     [79.9, 'Large House'],
     [80, 'Manor'],
     [99.9, 'Manor'],
-    [100, 'Estate'],
-    [140, 'Estate'],
+    [100, 'Mansion'],
+    [140, 'Mansion'],
   ])('%s%% → %s', (pct, name) => {
     expect(houseLevel(pct).name).toBe(name);
   });
@@ -174,9 +174,9 @@ describe('house levels', () => {
       for (let x = 6; x <= 17 && evaluateHouses(plan.buildings)[1].pct < 100; x++)
         plan.add({ typeId: 'flower-urn', x, y, rot: 0 });
     const houses = evaluateHouses(plan.buildings);
-    expect(houses.find((x) => x.building.id === h.id)!.level.name).toBe('Estate');
+    expect(houses.find((x) => x.building.id === h.id)!.level.name).toBe('Mansion');
     const s = summarize(houses);
     expect(s.total).toBe(4 + 10);
-    expect(s.byLevel.find((l) => l.level.name === 'Estate')!.count).toBe(1);
+    expect(s.byLevel.find((l) => l.level.name === 'Mansion')!.count).toBe(1);
   });
 });

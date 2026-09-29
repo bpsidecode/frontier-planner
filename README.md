@@ -78,7 +78,7 @@ Things to confirm in the game and correct where needed:
   - Hover over a tile to see its exact value.
   - H toggles the heatmap and G toggles the grid lines.
 - **Houses**
-  - Each level has its own color, a number badge, and a border that gets thicker as the level goes up. The Estate gets a gold border.
+  - Each level has its own color, a number badge, and a border that gets thicker as the level goes up. The Mansion gets a gold border.
   - Selecting a house shows its desirability, how much more it needs for the next level, and every building affecting it. A building that doesn't count because a stronger building with the same tag wins is struck through.
 - **Population panel:** shows total residents and, for each level, how many houses are at that level and how many people they hold.
 - **Saving:** plans autosave to the browser's localStorage, and you can export and import plans as JSON files.
@@ -125,9 +125,9 @@ The data comes from the wiki for game v1.1.0: [Desirability](https://farthestfro
 | 2     | Homestead   | ≥ 30%        | 5         |
 | 3     | Large House | ≥ 60%        | 6         |
 | 4     | Manor       | ≥ 80%        | 8         |
-| 5     | Estate      | ≥ 100%       | 10        |
+| 5     | Mansion     | ≥ 100%       | 10        |
 
-The thresholds are confirmed in-game for v1.1. The Estate level was added at your request; residents for the other levels come from the wiki.
+The thresholds and Mansion name are confirmed in-game for v1.1. The Mansion's 10-resident capacity was added at your request; residents for the other levels come from the wiki.
 
 ## Project layout
 
@@ -157,10 +157,10 @@ tests/sav.test.ts       – save parser tests on a synthetic save, plus an optio
 
 ## Verification
 
-1. Run `npm test`. The unit tests cover the falloff formula, tag stacking, rotation, overlap checks, JSON round-trips and every level threshold (99.9% is a Manor, 100% is an Estate).
+1. Run `npm test`. The unit tests cover the falloff formula, tag stacking, rotation, overlap checks, JSON round-trips and every level threshold (99.9% is a Manor, 100% is a Mansion).
 2. Place a Town Center, then a House about 5 tiles away. The house should show roughly 10% × (1 − 0.5 × 25/200) ≈ 9.4%.
 3. Place a Market and a Market Square near the house. Only the stronger one should count. A Well should add on top of them.
-4. Add positive buildings around a house until it passes 30%, 60%, 80% and 100%. The label should go Shelter → Homestead → Large House → Manor → Estate, and the population 4 → 5 → 6 → 8 → 10.
+4. Add positive buildings around a house until it passes 30%, 60%, 80% and 100%. The label should go Shelter → Homestead → Large House → Manor → Mansion, and the population 4 → 5 → 6 → 8 → 10.
 5. Place a Compost Yard next to the house. Nearby tiles should turn red and the house should drop a level. Drag the yard out of range and the house should recover.
 6. Rotate a 3×4 building. The footprint should become 4×3, and the preview should refuse to overlap other buildings.
 7. Reload the page and check that the plan is still there. Export the plan, clear it, then import the file and check that it comes back.
