@@ -12,7 +12,7 @@ export enum Terrain {
 }
 
 export type MineralKind = 'clay' | 'sand' | 'stone' | 'iron' | 'gold' | 'coal';
-export type ForageKind = 'greens' | 'herbs' | 'roots' | 'willow';
+export type ForageKind = 'greens' | 'herbs' | 'roots' | 'willow' | 'berries' | 'nuts' | 'mushrooms' | 'eggs';
 export type AnimalKind = 'deer' | 'boar' | 'wolf' | 'bear';
 export type EnemyKind = 'raiderCamp' | 'raider' | 'batteringRam' | 'wolfDen';
 export type RuinKind = 'relic' | 'salvage';

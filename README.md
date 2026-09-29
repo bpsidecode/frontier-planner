@@ -33,7 +33,7 @@ Things to confirm in the game and correct where needed:
   - [x] Water is ground below 3 m (`WATER_BELOW_M`). Confirmed, and it holds on the alpine map too: its lakes sit at −7 m.
   - [x] Steep, unbuildable ground rises more than 4 m per tile (`STEEP_M_PER_TILE`). Confirmed it matches the game. If the game lets you build somewhere the planner blocks, raise it. If the planner allows spots the game refuses, lower it.
 - [ ] **Decide which fertility layer to show.** The Fertility view uses the save's environmental fertility, as ff-game-map does. The save also has a current-fertility layer, which drops as fields are farmed.
-- [ ] **Decide whether to show more forageables.** The save also lists berries, nuts, mushrooms and eggs. Adding them is a line each in `src/import/sav.ts` and `src/data/overlays.ts`.
+- [x] **Show more forageables.** Berries, nuts, mushrooms and eggs are included alongside greens, herbs, roots and willow.
 - [x] **Check boar spawns.** Boars have no spawn areas in v1.1 saves. They spawn from boar dens, which the save stores in the same record type as wolf dens. The Boar toggle shows boar dens, and the Enemies group shows only wolf dens.
 - [ ] **Import all buildings from a save.** Most are done: building classes and prefab ids map to planner buildings with their position and rotation (`BUILDING_CLASSES` and `PREFAB_TYPES` in [`src/import/sav.ts`](src/import/sav.ts)). On the original Lametree save that's 1,182 buildings, with 2 skipped because they touch a neighbor. Still to do:
   - [x] **Upgrade tiers and variants.** Each building's `…Guids` record stores its prefab id, which identifies the exact variant. Two side-by-side test saves labeled every building upgrade pair, the Temple and Theater upgrades, all fences and fence gates, and nearly every decoration.
@@ -97,7 +97,7 @@ What the import brings in:
 - **Your town:** your buildings become planner buildings at their real position and rotation, so they count toward desirability and population. You can move or delete them like any other building. Crop fields, pastures, graveyards, roads and a few decorations aren't imported yet; the Map panel lists what was left out.
 - **Overlays:** the Map panel toggles each one. All are on by default, and your choices are remembered.
   - **Minerals:** clay, sand, stone, iron, gold and coal, drawn at their real radius and labeled with the amount (∞ for deep deposits).
-  - **Forageables:** greens, herbs, roots and willow.
+  - **Forageables:** greens, herbs, roots, willow, berries, nuts, mushrooms and eggs.
   - **Animal spawn areas:** deer, boar, wolf and bear, as 64 m squares.
   - **Enemies:** wolf dens, raider camps, raiders and battering rams.
   - **Ruins:** relic and salvage sites.

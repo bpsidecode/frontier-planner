@@ -74,6 +74,10 @@ const FORAGE_ITEMS: Record<string, ForageKind> = {
   ItemHerbs: 'herbs',
   ItemRoots: 'roots',
   ItemWillow: 'willow',
+  ItemBerries: 'berries',
+  ItemNuts: 'nuts',
+  ItemMushroom: 'mushrooms',
+  ItemEggs: 'eggs',
 };
 
 const DEPOSIT_KINDS: Record<number, MineralKind> = { 0: 'iron', 1: 'gold', 2: 'coal' };
@@ -513,7 +517,7 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
     }
   }
 
-  // --- forageables (only the kinds the planner shows)
+  // --- forageables
   const forageables: Point<ForageKind>[] = [];
   for (const pos of all(TYPE.ForageableResource)) {
     try {

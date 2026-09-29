@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { BUILDING_CLASSES, PREFAB_TYPES, TYPE, parseSave, readRecordTable } from '../src/import/sav';
 import { BUILDING_BY_ID } from '../src/data/buildings';
+import { ALL_OVERLAY_KEYS } from '../src/data/overlays';
+import { markersAt } from '../src/model/markers';
 import { Terrain, classifyTerrain, deserializeMap, serializeMap } from '../src/model/terrain';
 import { importSaveBuildings } from '../src/model/mapImport';
 import { footprint } from '../src/model/plan';
@@ -74,6 +76,17 @@ function syntheticSave(): ArrayBuffer {
     .u32(0);
   record(out, 'mineralManager', TYPE.MineralManager, mn);
 
+  // Four forageable records, one for each of the additional item kinds shown by the planner.
+  const forage = (id: number, x: number, item: string) =>
+    new Writer()
+      .u32(id).u8(0).u8(0).point(x, 2.5)
+      .zeros(28).str('ForageableResource').u8(0).u32(0)
+      .zeros(38).u32(1).str(item).u32(1);
+  record(out, 'forageableResource0', TYPE.ForageableResource, forage(20, 2.5, 'ItemBerries'));
+  record(out, 'forageableResource1', TYPE.ForageableResource, forage(21, 7.5, 'ItemNuts'));
+  record(out, 'forageableResource2', TYPE.ForageableResource, forage(22, 12.5, 'ItemMushroom'));
+  record(out, 'forageableResource3', TYPE.ForageableResource, forage(23, 17.5, 'ItemEggs'));
+
   // Town center at world (10, 10), no parent transform, no rotation → tile (2, 2). Header is
   // id, hasParent, pad, position, quaternion (x, y, z, w), scale, class name, then building data.
   const tc = new Writer().u32(42).u8(0).u8(0).point(10, 10).f32(0).f32(0).f32(0).f32(1).f32(1).f32(1).f32(1).str('TownCenter').zeros(32);
@@ -103,6 +116,12 @@ describe('save parser (synthetic)', () => {
     expect(map.fertility[0 * N + 3]).toBe(0);
     expect(map.water[2 * N + 1]).toBe(Math.round(0.2 * 255));
     expect(map.fodder[5]).toBe(Math.round(0.5 * 255));
+    expect(map.forageables).toEqual([
+      { kind: 'berries', x: 3.5, y: 0.5 },
+      { kind: 'nuts', x: 2.5, y: 0.5 },
+      { kind: 'mushrooms', x: 1.5, y: 0.5 },
+      { kind: 'eggs', x: 0.5, y: 0.5 },
+    ]);
   });
 
   it('classifies water and steep terrain', () => {
@@ -111,6 +130,12 @@ describe('save parser (synthetic)', () => {
     expect(map.terrain[3 * N + 0]).toBe(Terrain.Steep);
     expect(map.terrain[3 * N + 1]).toBe(Terrain.Steep);
     expect(map.terrain[2 * N + 2]).toBe(Terrain.Land);
+  });
+
+  it('has visible overlay and tooltip metadata for every forageable kind', () => {
+    const visible = new Set(ALL_OVERLAY_KEYS);
+    const labels: Record<string, string> = { berries: 'Berries', nuts: 'Nuts', mushrooms: 'Mushrooms', eggs: 'Eggs' };
+    for (const f of map.forageables) expect(markersAt(map, visible, f.x, f.y)).toContain(labels[f.kind]);
   });
 
   it('converts point positions to tiles with mirrored x', () => {

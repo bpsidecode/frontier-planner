@@ -34,6 +34,10 @@ export const OVERLAY_GROUPS: OverlayGroup[] = [
       { key: 'forage:herbs', label: 'Herbs', color: '#8b008b' },
       { key: 'forage:roots', label: 'Roots', color: '#808000' },
       { key: 'forage:willow', label: 'Willow', color: '#e6c800' },
+      { key: 'forage:berries', label: 'Berries', color: '#dc2626' },
+      { key: 'forage:nuts', label: 'Nuts', color: '#8b5a2b' },
+      { key: 'forage:mushrooms', label: 'Mushrooms', color: '#c47f5b' },
+      { key: 'forage:eggs', label: 'Eggs', color: '#f0dca0' },
     ],
   },
   {
