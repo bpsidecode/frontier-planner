@@ -641,13 +641,30 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
 
   const buildings: SaveBuilding[] = [];
   const notImported: Record<string, number> = {};
-  for (const list of spans.values())
+  const unknownBuildingClasses: Record<string, number> = {};
+  const nonBuildingTypes = new Set<number>([
+    TYPE.MetaData,
+    TYPE.AgricultureManager,
+    TYPE.AnimalManager,
+    TYPE.MineralManager,
+    TYPE.ForageableResource,
+    TYPE.TerrainManager,
+    TYPE.WolfDen,
+    TYPE.RaiderCamp,
+    TYPE.Raider,
+    TYPE.BatteringRam,
+    TYPE.RelicExtraction,
+    TYPE.SalvagingSite,
+    TYPE.Guids,
+  ]);
+  for (const [recordType, list] of spans)
     for (const span of list) {
       const label = NOT_IMPORTED[span.name];
       if (label) {
         notImported[label] = (notImported[label] ?? 0) + 1;
         continue;
       }
+      if (nonBuildingTypes.has(recordType)) continue;
       if (span.name.startsWith('raider') || span.end - span.start < 60) continue;
       try {
         const r = at(span.start);
@@ -663,13 +680,16 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
         const qw = r.f32();
         r.skip(12); // scale
         const cls = r.str();
+        if (!(p.x >= 0 && p.x <= worldM && p.z >= 0 && p.z <= worldM)) continue;
+        // Avoid reporting arbitrary record bytes that happen to resemble the start of a building.
+        if (!/^[A-Za-z][A-Za-z0-9_.+`]{0,127}$/.test(cls)) continue;
         const prefab = prefabs.get(span.name)?.[span.index];
         const typeId = (prefab && PREFAB_TYPES[prefab]) || BUILDING_CLASSES[cls];
         if (!typeId) {
           if (cls === 'Decorations') notImported['Other decorations'] = (notImported['Other decorations'] ?? 0) + 1;
+          else unknownBuildingClasses[cls] = (unknownBuildingClasses[cls] ?? 0) + 1;
           continue;
         }
-        if (!(p.x >= 0 && p.x <= worldM && p.z >= 0 && p.z <= worldM)) continue;
         const yaw = 2 * Math.atan2(qy, qw);
         buildings.push({ typeId, ...toTile(p), rot: ((Math.round(yaw / (Math.PI / 2)) % 4) + 4) % 4, ...(prefab ? { prefab } : {}) });
       } catch {
@@ -694,6 +714,7 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
     fertilityBonus,
     buildings,
     notImported,
+    unknownBuildingClasses,
   };
 }
 

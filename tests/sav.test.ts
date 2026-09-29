@@ -123,6 +123,7 @@ describe('save parser (synthetic)', () => {
       { typeId: 'hunter-cabin', x: 2.5, y: 2.5, rot: 1 },
     ]);
     expect(map.notImported).toEqual({ 'Crop fields': 1 });
+    expect(map.unknownBuildingClasses).toEqual({ Mystery: 1 });
   });
 
   it('round-trips through serialization', () => {
@@ -131,6 +132,7 @@ describe('save parser (synthetic)', () => {
     expect(Array.from(back.terrain)).toEqual(Array.from(map.terrain));
     expect(Array.from(back.fertility)).toEqual(Array.from(map.fertility));
     expect(back.minerals).toEqual(map.minerals);
+    expect(back.unknownBuildingClasses).toEqual({ Mystery: 1 });
   });
 
   it('rejects files that are not saves', () => {

@@ -662,11 +662,11 @@ saveInput.addEventListener('change', async () => {
     const total = (o: Record<string, number>) => Object.values(o).reduce((a, b) => a + b, 0);
     const placed = total(report.imported);
     const overlapping = total(report.overlapping);
-    const pending = total(nextMap.notImported);
+    const pending = total(nextMap.notImported) + total(nextMap.unknownBuildingClasses);
     const parts = [`Imported ${nextMap.size}×${nextMap.size} map with ${placed} building${placed === 1 ? '' : 's'}`];
     if (overlapping) parts.push(`${overlapping} skipped (overlapping)`);
     if (pending) parts.push(`${pending} not supported yet (see Map panel)`);
-    console.info('Save import', report, nextMap.notImported);
+    console.info('Save import', report, nextMap.notImported, nextMap.unknownBuildingClasses);
     if (!isSupportedVersion(nextMap.version)) parts.push(`save version ${nextMap.version} is older than v1.1.0 and may be incomplete`);
     toast(parts.join(' · '));
   } catch (err) {

@@ -73,10 +73,15 @@ export function renderMapPanel(root: HTMLElement, map: MapData | null, visible: 
   const pendingNote = pending.length
     ? `<p class="tagnote">Not imported yet: ${pending.map(([k, n]) => `${escapeHtml(k.toLowerCase())} (${n})`).join(', ')}.</p>`
     : '';
+  const unknown = Object.entries(map.unknownBuildingClasses ?? {}).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const unknownNote = unknown.length
+    ? `<p class="tagnote">Unrecognized building classes: ${unknown.map(([k, n]) => `<code>${escapeHtml(k)}</code> (${n})`).join(', ')}. These records were not imported.</p>`
+    : '';
   root.innerHTML = `
     <div class="map-meta"><b>${escapeHtml(map.name)}</b><br>
       <span class="tagnote">${map.size}×${map.size} tiles${map.version ? ` · game ${escapeHtml(map.version)}` : ''} · ${map.buildings.length} buildings from the save</span></div>
     ${pendingNote}
+    ${unknownNote}
     ${groups}
     <div class="actions">
       <button class="btn" data-map="import">Import another…</button>

@@ -49,7 +49,7 @@ Things to confirm in the game and correct where needed:
 - [x] **Update the house upgrade desirability requirements to the current game values.** Houses upgrade at 30%, 60%, 80% and 100% (confirmed in-game), set in [`src/data/houses.ts`](src/data/houses.ts).
 - [x] **Add upgrade and downgrade buttons to a building's details panel.** They appear only for confirmed upgrade paths, keep the building's position and rotation, validate footprint changes, and are undoable.
 - [x] **Import every building type.** The Gazebo, Guild Hall, Grand Plaza, Stable, Altar, Pastry Shop, Hospital, Apothecary, Furniture Workshop, monuments and decorations now import.
-  - [ ] Unrecognized classes are still skipped without being listed under "Not imported yet"; the Map panel should list them too.
+  - [x] Unrecognized building classes are listed with their occurrence counts in the Map panel.
 - [x] **Fix sideways Barracks.** The game's unrotated Barracks is 6×4, not 4×6, as the side-by-side pairs showed: each pair was placed touching, so the gap between centers is the building's width. Barracks, Fort and Barn (all even on both sides, where rotation can't be deduced from the center) now use the game's orientation, as do the Hunter Cabin, Firewood Splitter, Fletcher, Forager, Armory, Blacksmith, Foundry, Stable and Goat Barn.
 - [x] **Build all buildings and their upgrades side by side in a test save.**
 - [ ] **Reflect tech tree improvements,** mainly the ones that raise desirability.

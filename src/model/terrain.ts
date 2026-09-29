@@ -81,6 +81,8 @@ export interface MapData {
   buildings: SaveBuilding[];
   /** Save objects the importer doesn't handle yet, by label (e.g. "Crop fields": 11). */
   notImported: Record<string, number>;
+  /** Building class names that have a standard building header but no catalog mapping. */
+  unknownBuildingClasses: Record<string, number>;
 }
 
 export type LayerView = 'fertility' | 'fodder' | 'water';
@@ -166,6 +168,7 @@ export function deserializeMap(raw: unknown): MapData | null {
     })
     .filter((b) => b.typeId);
   if (!map.notImported || typeof map.notImported !== 'object') map.notImported = {};
+  if (!map.unknownBuildingClasses || typeof map.unknownBuildingClasses !== 'object') map.unknownBuildingClasses = {};
   return map;
 }
 
