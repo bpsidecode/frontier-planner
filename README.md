@@ -41,7 +41,8 @@ Things to confirm in the game and correct where needed:
   - [ ] **Two unidentified decorations:** a 1×1 decoration placed between the corner bench plazas and the medium plazas in the test row (prefab `fe6ea4b5…`), and a 2×2 decoration in the original town (prefab `1935626f…`).
   - [ ] **Which bush is which.** The four bushes were placed as a 2×2 block and are labeled in reading order. All four have the same size and desirability, so a mix-up doesn't change results.
   - [ ] **Crop fields, pastures and graveyards.** Their records store a list of tiles instead of a position.
-  - [ ] **Roads and bridges.** Roads are stored as splines (`splineRoadContainer`).
+  - [x] **Roads.** Road splines (`splineRoadContainer`) are rasterized onto the game's 5 m grid and imported as editable 1×1 Road objects.
+  - [ ] **Bridges.**
   - [x] **Wide gates.** Gates centered as if two tiles wide import as the 2×1 Wide Gate (6 in the Lametree save).
   - [ ] **Raider guard towers.** Their records (`raiderGuardTower0`) use a different layout and aren't shown yet.
 - [ ] **Add desirability values for v1.1 buildings.** The Academy, Book Binder, Crypt, Treasury, Storage Depots, Guild Hall, Forager Garden, the monuments, the bench plazas and Crates and Barrels are in the catalog without desirability values, as they aren't on the wiki. The Pharmacy hasn't appeared in any save yet. Add values in [`src/data/buildings.ts`](src/data/buildings.ts).
@@ -94,7 +95,7 @@ What the import brings in:
 - **Terrain**
   - Water and steep ground are drawn on a shaded relief and block building placement. The placement preview turns red there, and a message says why.
   - Water is ground below 3 m. Steep ground rises more than 4 m to a neighboring tile.
-- **Your town:** your buildings become planner buildings at their real position and rotation, so they count toward desirability and population. You can move or delete them like any other building. Crop fields, pastures, graveyards, roads and a few decorations aren't imported yet; the Map panel lists what was left out.
+- **Your town:** your buildings become planner buildings at their real position and rotation, so they count toward desirability and population. Roads are reconstructed from their saved curves as editable 1×1 road tiles. You can move or delete imported objects like anything placed in the planner. Crop fields, pastures, graveyards, bridges and a few decorations aren't imported yet; the Map panel lists what was left out.
 - **Overlays:** the Map panel toggles each one. All are on by default, and your choices are remembered.
   - **Minerals:** clay, sand, stone, iron, gold and coal, drawn at their real radius and labeled with the amount (∞ for deep deposits).
   - **Forageables:** greens, herbs, roots, willow, berries, nuts, mushrooms and eggs.

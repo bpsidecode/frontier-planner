@@ -1,6 +1,6 @@
 // Farthest Frontier .sav reader. Ported from the parts of mikh-abc/ff-game-map
 // (FileDataReader.cpp, DataReader.cpp, StaticData.cpp, Apache-2.0) that locate terrain,
-// resources, animal spawns, enemies and buildings.
+// resources, animal spawns, enemies, buildings and roads.
 
 import {
   classifyTerrain,
@@ -35,6 +35,7 @@ export const TYPE = {
   RelicExtraction: 2012388863,
   SalvagingSite: 117926143,
   Guids: 4058971987,
+  SplineRoadContainer: 3467803903,
 } as const;
 
 const ITEM_FILLER = 417;
@@ -284,7 +285,6 @@ const NOT_IMPORTED: Record<string, string> = {
   cropField: 'Crop fields',
   grazingArea: 'Pastures',
   graveyard: 'Graveyards',
-  splineRoadContainer: 'Road segments',
   bridgeContainer: 'Bridges',
   buildingBuildSite: 'Construction sites',
   gateBuildSite: 'Construction sites',
@@ -628,6 +628,46 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
   collect(TYPE.RelicExtraction, 'relic', ruins);
   collect(TYPE.SalvagingSite, 'salvage', ruins);
 
+  // --- roads: each SplineRoadContainer holds a cubic Bezier centerline (four Vector3s).
+  // Roads are built on the same 5 m grid as the planner, but long and curved stretches are saved as
+  // one spline rather than one object per tile. Sample densely enough to visit every crossed cell,
+  // then deduplicate cells shared by adjoining splines and intersections.
+  const roads: SaveBuilding[] = [];
+  const roadCells = new Set<number>();
+  const cubic = (a: number, b: number, c: number, d: number, t: number) => {
+    const u = 1 - t;
+    return u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d;
+  };
+  for (const span of spans.get(TYPE.SplineRoadContainer) ?? []) {
+    try {
+      if (span.name !== 'splineRoadContainer' || span.end - span.start < 68) continue;
+      const r = at(span.start + 12);
+      const points = [r.point(), r.point(), r.point(), r.point()];
+      r.f32(); // reserved
+      const savedLengthM = r.f32();
+      if (!points.every((p) => Number.isFinite(p.x) && Number.isFinite(p.z))) continue;
+      const controlLengthM = points.slice(1).reduce((n, p, i) => n + Math.hypot(p.x - points[i].x, p.z - points[i].z), 0);
+      const lengthM = Number.isFinite(savedLengthM) && savedLengthM > 0 ? Math.max(savedLengthM, controlLengthM) : controlLengthM;
+      const steps = Math.max(1, Math.ceil((lengthM / cellM) * 4));
+      for (let k = 0; k <= steps; k++) {
+        const t = k / steps;
+        const p = toTile({
+          x: cubic(points[0].x, points[1].x, points[2].x, points[3].x, t),
+          z: cubic(points[0].z, points[1].z, points[2].z, points[3].z, t),
+        });
+        const x = Math.floor(p.x);
+        const y = Math.floor(p.y);
+        if (x < 0 || y < 0 || x >= N || y >= N) continue;
+        const key = y * N + x;
+        if (roadCells.has(key)) continue;
+        roadCells.add(key);
+        roads.push({ typeId: 'road', x: x + 0.5, y: y + 0.5, rot: 0 });
+      }
+    } catch {
+      /* skip unreadable road */
+    }
+  }
+
   // --- player buildings: every record whose header decodes to a known building class.
   // Header: u32 id, u8 hasParent (+41 bytes), 1 byte, position, rotation quaternion, scale, class name.
   // "<name>Guids" records list each instance's prefab id, in record-index order.
@@ -661,6 +701,7 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
     TYPE.RelicExtraction,
     TYPE.SalvagingSite,
     TYPE.Guids,
+    TYPE.SplineRoadContainer,
   ]);
   for (const [recordType, list] of spans)
     for (const span of list) {
@@ -701,6 +742,10 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
         /* not a building record */
       }
     }
+
+  // Keep roads after structures. Both roads and many gates/fences are 1x1, and the stable area sort
+  // in mapImport preserves this order so a road running under an entrance never hides the structure.
+  buildings.push(...roads);
 
   return {
     name: fileName.replace(/\.sav$/i, ''),

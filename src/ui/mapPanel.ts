@@ -77,9 +77,11 @@ export function renderMapPanel(root: HTMLElement, map: MapData | null, visible: 
   const unknownNote = unknown.length
     ? `<p class="tagnote">Unrecognized building classes: ${unknown.map(([k, n]) => `<code>${escapeHtml(k)}</code> (${n})`).join(', ')}. These records were not imported.</p>`
     : '';
+  const roadTiles = map.buildings.filter((b) => b.typeId === 'road').length;
+  const structures = map.buildings.length - roadTiles;
   root.innerHTML = `
     <div class="map-meta"><b>${escapeHtml(map.name)}</b><br>
-      <span class="tagnote">${map.size}×${map.size} tiles${map.version ? ` · game ${escapeHtml(map.version)}` : ''} · ${map.buildings.length} buildings from the save</span></div>
+      <span class="tagnote">${map.size}×${map.size} tiles${map.version ? ` · game ${escapeHtml(map.version)}` : ''} · ${structures} buildings${roadTiles ? ` · ${roadTiles} road tiles` : ''} from the save</span></div>
     ${pendingNote}
     ${unknownNote}
     ${groups}
