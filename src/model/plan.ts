@@ -139,6 +139,32 @@ export class Plan {
     return true;
   }
 
+  /** Swap a building to another catalog type while keeping its id, position and rotation. */
+  replaceType(id: number, typeId: string): boolean {
+    const b = this.get(id);
+    if (!b || !BUILDING_BY_ID[typeId]) return false;
+    const old = footprint(b);
+    const next: Placed = { id: b.id, typeId, x: b.x, y: b.y, rot: b.rot };
+    const r = footprint(next);
+    if (!inBounds(r, this.size)) return false;
+    for (let y = r.y; y < r.y + r.h; y++)
+      for (let x = r.x; x < r.x + r.w; x++) {
+        const i = y * this.size + x;
+        const occupant = this.occ[i];
+        if (occupant && occupant !== id) return false;
+        // Imported buildings may already touch terrain classified as blocked. Let a same-size or
+        // smaller replacement keep those tiles, but don't let a larger replacement claim new ones.
+        const wasCovered = x >= old.x && x < old.x + old.w && y >= old.y && y < old.y + old.h;
+        if (this.blocked?.[i] && !wasCovered) return false;
+      }
+    this.stamp(old, 0);
+    b.typeId = typeId;
+    delete b.w;
+    delete b.h;
+    this.stamp(r, id);
+    return true;
+  }
+
   /** Rotate 90° clockwise around the building's center, nudging it back into bounds if needed. */
   rotate(id: number): boolean {
     const b = this.get(id);

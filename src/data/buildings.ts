@@ -44,6 +44,8 @@ export interface BuildingType {
   desirability?: Desirability;
   house?: boolean;
   sizeUnverified?: boolean;
+  /** Catalog id of the next tier, when this building can be upgraded in place. */
+  upgradeTo?: string;
   /** Buildings whose size the player chooses (fields, graveyards). */
   variable?: { min: number; max: number };
 }
@@ -253,12 +255,65 @@ add('Roads & Fences', 'Hedge Fence Gate', 1, 1);
 add('Roads & Fences', 'Wrought Iron Fence', 1, 1);
 add('Roads & Fences', 'Wrought Iron Fence Gate', 1, 1);
 
+// Confirmed base/upgraded pairs represented by distinct catalog entries. Keep these links here rather
+// than inferring them from names: several similarly named buildings are alternatives, not upgrades.
+const UPGRADE_PATHS: [from: string, to: string][] = [
+  ['market', 'market-square'],
+  ['healers-house', 'hospital'],
+  ['shrine', 'altar'],
+  ['temple', 'grand-temple'],
+  ['theater', 'grand-theater'],
+  ['festival-pole', 'paved-festival-pole'],
+  ['small-park', 'small-paved-park'],
+  ['large-park', 'large-paved-park'],
+  ['flag-pole', 'paved-flag-pole'],
+  ['medium-plaza', 'medium-brick-plaza'],
+  ['medium-garden', 'medium-paved-garden'],
+  ['garden-trail', 'garden-path'],
+  ['small-garden', 'small-paved-garden'],
+  ['small-plaza', 'small-brick-plaza'],
+  ['small-bench-plaza', 'small-brick-bench-plaza'],
+  ['small-corner-bench-plaza', 'small-brick-corner-bench-plaza'],
+  ['bakery', 'pastry-shop'],
+  ['barn', 'large-barn'],
+  ['goat-barn', 'large-goat-barn'],
+  ['forager-shack', 'forager-garden'],
+  ['hunter-cabin', 'hunter-lodge'],
+  ['basic-well', 'improved-well'],
+  ['firewood-splitter', 'firewood-splitter-workshop'],
+  ['saw-pit', 'saw-mill'],
+  ['fletcher-building', 'fletcher-workshop'],
+  ['work-camp', 'forester-camp'],
+  ['armory', 'arsenal'],
+  ['blacksmith-forge', 'blacksmith-workshop'],
+  ['foundry', 'smeltery'],
+  ['stockyard', 'large-stockyard'],
+  ['root-cellar', 'brick-root-cellar'],
+  ['storage-depot', 'large-storage-depot'],
+  ['barracks', 'fort'],
+  ['lookout-tower', 'watch-tower'],
+  ['watch-tower', 'battlement-tower'],
+];
+
 export const BUILDING_BY_ID: Record<string, BuildingType> = Object.fromEntries(
   BUILDINGS.map((b) => [b.id, b]),
 );
+
+const DOWNGRADE_BY_ID: Record<string, string> = {};
+for (const [from, to] of UPGRADE_PATHS) {
+  const base = BUILDING_BY_ID[from];
+  if (!base || !BUILDING_BY_ID[to]) throw new Error(`Unknown upgrade path: ${from} -> ${to}`);
+  base.upgradeTo = to;
+  DOWNGRADE_BY_ID[to] = from;
+}
 
 export function getType(id: string): BuildingType {
   const t = BUILDING_BY_ID[id];
   if (!t) throw new Error(`Unknown building type: ${id}`);
   return t;
+}
+
+export function getDowngrade(id: string): BuildingType | undefined {
+  const from = DOWNGRADE_BY_ID[id];
+  return from ? BUILDING_BY_ID[from] : undefined;
 }

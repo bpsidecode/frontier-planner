@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Plan, footprint, center, type Placed } from '../src/model/plan';
 import { breakdown, computeField, effectAt, pointDesirability } from '../src/model/desirability';
 import { evaluateHouses, houseLevel, summarize } from '../src/model/houses';
-import { BUILDINGS } from '../src/data/buildings';
+import { BUILDINGS, BUILDING_BY_ID, getDowngrade } from '../src/data/buildings';
 
 const P = (typeId: string, x: number, y: number, rot = 0, id = 0): Placed => ({ id, typeId, x, y, rot });
 
@@ -14,6 +14,16 @@ describe('catalog', () => {
       expect(b.w).toBeGreaterThan(0);
       expect(b.h).toBeGreaterThan(0);
     }
+  });
+
+  it('has valid, reversible upgrade links', () => {
+    for (const b of BUILDINGS) {
+      if (!b.upgradeTo) continue;
+      expect(BUILDING_BY_ID[b.upgradeTo]).toBeDefined();
+      expect(getDowngrade(b.upgradeTo)?.id).toBe(b.id);
+    }
+    expect(BUILDING_BY_ID.market.upgradeTo).toBe('market-square');
+    expect(BUILDING_BY_ID['basic-well'].upgradeTo).toBe('improved-well');
   });
 });
 
@@ -98,6 +108,19 @@ describe('plan', () => {
     expect(plan.update(lib.id, { x: 50, y: 50 })).toBe(true);
     expect(plan.at(51, 51)?.id).toBe(lib.id);
     expect(plan.at(11, 11)).toBeUndefined();
+  });
+
+  it('replaces a building type in place and validates a larger footprint', () => {
+    const plan = new Plan();
+    const well = plan.add({ typeId: 'basic-well', x: 10, y: 12, rot: 1 })!;
+    expect(plan.replaceType(well.id, 'improved-well')).toBe(true);
+    expect(well).toMatchObject({ id: 1, typeId: 'improved-well', x: 10, y: 12, rot: 1 });
+
+    const mine = plan.add({ typeId: 'coal-mine', x: 20, y: 20, rot: 0 })!;
+    plan.add({ typeId: 'flower-urn', x: 22, y: 22, rot: 0 });
+    expect(plan.replaceType(mine.id, 'deep-coal-mine')).toBe(false);
+    expect(mine.typeId).toBe('coal-mine');
+    expect(plan.at(20, 20)?.id).toBe(mine.id);
   });
 
   it('round-trips through JSON and drops invalid entries', () => {

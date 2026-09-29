@@ -1,5 +1,5 @@
 import './style.css';
-import { getType, type BuildingType } from './data/buildings';
+import { getDowngrade, getType, type BuildingType } from './data/buildings';
 import { Plan, TILE_M, clamp, inBounds, rotatedSize, type Placed, type Rect } from './model/plan';
 import { breakdown, computeField } from './model/desirability';
 import { evaluateHouses, nextLevel, summarize, type HouseInfo } from './model/houses';
@@ -227,6 +227,17 @@ function deleteSelected() {
   changed();
 }
 
+function replaceSelected(typeId: string) {
+  if (selectedId == null) return;
+  const before = snapshot();
+  if (plan.replaceType(selectedId, typeId)) {
+    pushUndo(before);
+    changed();
+  } else {
+    toast(`Not enough room for ${getType(typeId).name}`);
+  }
+}
+
 function tryPaint(isClick: boolean) {
   if (!drag || drag.kind !== 'paint' || !placing) return;
   const g = ghost();
@@ -349,9 +360,19 @@ function renderInfo() {
   } else {
     html += describeEffect(t);
   }
+  const upgrade = t.upgradeTo ? getType(t.upgradeTo) : undefined;
+  const downgrade = getDowngrade(t.id);
+  if (upgrade || downgrade) {
+    html += `<div class="actions upgrade-actions">
+      ${upgrade ? `<button class="btn primary" data-info="upgrade" title="Upgrade to ${esc(upgrade.name)}">Upgrade</button>` : ''}
+      ${downgrade ? `<button class="btn" data-info="downgrade" title="Downgrade to ${esc(downgrade.name)}">Downgrade</button>` : ''}
+    </div>`;
+  }
   html += `<div class="actions"><button class="btn" data-info="rotate">Rotate</button><button class="btn danger" data-info="delete">Delete</button></div>`;
   infoEl.innerHTML = html;
 
+  if (upgrade) infoEl.querySelector('[data-info="upgrade"]')!.addEventListener('click', () => replaceSelected(upgrade.id));
+  if (downgrade) infoEl.querySelector('[data-info="downgrade"]')!.addEventListener('click', () => replaceSelected(downgrade.id));
   infoEl.querySelector('[data-info="rotate"]')!.addEventListener('click', rotate);
   infoEl.querySelector('[data-info="delete"]')!.addEventListener('click', deleteSelected);
   infoEl.querySelectorAll<HTMLElement>('.contrib li').forEach((li) =>
