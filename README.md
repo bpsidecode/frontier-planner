@@ -19,6 +19,8 @@ Things to confirm in the game and correct where needed:
   - [x] Vault 3×4 (the save calls it `Treasury`), Civic and Military Monuments 5×5
   - [x] Rose Bush, Low Brush, Tall Brush (1×1), confirmed by the decoration test row
   - [x] Lookout, Watch and Battlement Towers are all 1×1, and they don't sit on wall tiles.
+  - [x] **Read real footprints from saves.** Every building and decoration record stores the tiles it occupies, plus its size with rotation already applied (see the write-back item below). The parser reads it into each imported building's `size`. The real-save test checks every catalog entry against it, and found 16 entries whose width and height were swapped compared with the game's unrotated orientation. Those are now fixed: Academy, Apothecary, Brickyard, Candle Shop, Charcoal Kiln, Chicken Coop (which imported sideways), Cobbler, Large Statue, Potter, Pub, School, Storehouse, Trading Post and Weaver, plus the Warehouse and Trading Center, which share their base building's orientation but haven't appeared in a save yet.
+  - [ ] The guessed sizes above (Hedge Garden, Topiary Garden, Trellis) can be confirmed by placing them in a save and running the real-save test.
 - [x] **Confirm building sizes in-game (v1.1).** Confirmed and updated in the catalog:
   - [x] Academy 4×5, Book Binder 2×3, Crypt 3×3, Storage Depot 2×3
   - [x] Library 4×3, Theater 5×5, Temple 5×5, Guild Hall 5×4, Apothecary 2×3, Barracks 6×4
@@ -56,7 +58,12 @@ Things to confirm in the game and correct where needed:
 - [x] **Build all buildings and their upgrades side by side in a test save.**
 - [ ] **Reflect tech tree improvements,** mainly the ones that raise desirability.
 - [x] **Tell fences apart from palisade walls.** Prefab ids separate palisade walls from fences, fieldstone, hedge and wrought iron fences, and their gates. The original Lametree town has 462 palisade wall tiles and 317 fence tiles.
-- [ ] **Long term: write changes back to the `.sav` file.** The goal is to rearrange buildings in the planner and save them back into the game. This needs the full building record format, and it should always write a new file rather than overwrite the original save. ff-game-map's `GameMapChanger.cpp` is a starting point.
+- [ ] **Write changes back to the `.sav` file.** The goal is to rearrange buildings in the planner and save them back into the game, always writing a new file rather than overwriting the original save.
+  - [x] **Moving a building works in-game** (tested by moving a Basic Well in a copy of the small alpine save). Only the building's own record needs editing: its header position and height, plus an occupied-tile block later in the record. The game rebuilt everything else on load: the old spot was free to build on, and villagers used the well at its new spot.
+  - [x] **The occupied-tile block is in every building.** Its layout is center (x, y, z), size in meters (x, y, z, already rotated), a `u8` flag (always 1), a `u32` tile count, then that many tile centers as (x, z). It is found by searching the record for the header's exact x and z. All 1,238 standard building records in the AllPair save have exactly one, and its tile list always fills the footprint.
+  - [x] **Rotating a building works in-game** (tested by rotating the Hunter Cabin 90° and moving it). The quaternion was set to a pure yaw, and the block's size and tile list were swapped to match. The hunter stayed assigned, used the cabin and hunted normally, and the old spot was free to build on.
+  - [ ] **Export .sav button** for moved and rotated buildings. Added and deleted buildings, roads and flattening need more work and should be listed as not written back.
+  - [ ] **Raider guard towers** decode with the standard building header in the alpine save, so they may be easier to show than the to-do item above suggests.
 
 ## Features
 

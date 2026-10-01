@@ -92,8 +92,12 @@ function syntheticSave(): ArrayBuffer {
   const tc = new Writer().u32(42).u8(0).u8(0).point(10, 10).f32(0).f32(0).f32(0).f32(1).f32(1).f32(1).f32(1).str('TownCenter').zeros(32);
   record(out, 'townCenter', 3556611327, tc);
   // A cabin rotated 90° (quaternion y = w = √½) at a half-tile center, an unknown class that is reported, and a tree that is neither imported nor reported.
+  // The cabin's occupied-tile block comes after some unrelated bytes: center, size (10 × 15 m: 2 × 3 tiles as placed), flag, count, tile centers.
   const s = Math.SQRT1_2;
-  record(out, 'hunterBuilding', 1, new Writer().u32(43).u8(0).u8(0).point(7.5, 12.5).f32(0).f32(s).f32(0).f32(s).f32(1).f32(1).f32(1).str('HunterBuilding').zeros(32));
+  const cabin = new Writer().u32(43).u8(0).u8(0).point(7.5, 12.5).f32(0).f32(s).f32(0).f32(s).f32(1).f32(1).f32(1).str('HunterBuilding').zeros(7);
+  cabin.point(7.5, 12.5).f32(10).f32(1).f32(15).u8(1).u32(6);
+  for (const z of [7.5, 12.5, 17.5]) for (const x of [5, 10]) cabin.f32(x).f32(z);
+  record(out, 'hunterBuilding', 1, cabin.zeros(8));
   record(out, 'treeResource', 2, new Writer().u32(45).u8(0).u8(0).point(5, 5).f32(0).f32(0).f32(0).f32(1).f32(1).f32(1).f32(1).str('TreeResource').zeros(32));
   record(out, 'mysteryBuilding', 2, new Writer().u32(44).u8(0).u8(0).point(5, 5).f32(0).f32(0).f32(0).f32(1).f32(1).f32(1).f32(1).str('Mystery').zeros(32));
   // A straight road spline across the bottom row. The importer turns the continuous curve into
@@ -157,7 +161,7 @@ describe('save parser (synthetic)', () => {
     expect(iron).toMatchObject({ x: 3, y: 1, r: 0.5, amount: 500, deep: true });
     expect(map.buildings).toEqual([
       { typeId: 'town-center', x: 2, y: 2, rot: 0 },
-      { typeId: 'hunter-cabin', x: 2.5, y: 2.5, rot: 1 },
+      { typeId: 'hunter-cabin', x: 2.5, y: 2.5, rot: 1, size: { w: 2, h: 3 } },
       { typeId: 'road', x: 0.5, y: 3.5, rot: 0 },
       { typeId: 'road', x: 1.5, y: 3.5, rot: 0 },
       { typeId: 'road', x: 2.5, y: 3.5, rot: 0 },
@@ -224,6 +228,27 @@ describe.skipIf(!realPath)('real save file', () => {
     expect(map.minerals.length).toBeGreaterThan(0);
     expect(map.forageables.length).toBeGreaterThan(0);
     expect(map.spawns.length).toBeGreaterThan(0);
+  });
+
+  it('has catalog footprints in the game\'s unrotated orientation', () => {
+    // Each building record stores the tiles it occupies, as placed. Rotating the catalog's w×h by the
+    // save's rotation must give the same size, or the planner and the game disagree on orientation.
+    const wrong = new Map<string, string>();
+    let checked = 0;
+    for (const b of map.buildings) {
+      if (!b.size) continue;
+      const t = BUILDING_BY_ID[b.typeId];
+      if (t.variable) continue;
+      checked++;
+      const exp = b.rot % 2 ? { w: t.h, h: t.w } : { w: t.w, h: t.h };
+      // Gates centered as if two tiles wide import as the Wide Gate.
+      const wide = b.typeId === 'palisade-gate' && b.size.w * b.size.h === 2;
+      if (!wide && (exp.w !== b.size.w || exp.h !== b.size.h))
+        wrong.set(b.typeId, `save ${b.size.w}×${b.size.h} at rot ${b.rot}, catalog ${t.w}×${t.h}`);
+    }
+    console.log('footprints checked', checked);
+    expect(checked).toBeGreaterThan(0);
+    expect(Object.fromEntries(wrong)).toEqual({});
   });
 
   it('imports the town onto land', () => {

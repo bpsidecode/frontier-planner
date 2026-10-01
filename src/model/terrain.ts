@@ -59,6 +59,8 @@ export interface SaveBuilding {
   rot: number;
   /** The game's prefab id for this building, which identifies its exact variant (tier). */
   prefab?: string;
+  /** Footprint in tiles as placed (rotation applied), from the record's occupied-tile block. */
+  size?: { w: number; h: number };
 }
 
 export interface MapData {

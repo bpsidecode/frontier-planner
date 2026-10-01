@@ -410,6 +410,34 @@ function findSpawnTable(buf: ArrayBuffer, start: number, end: number, maxKey: nu
   return best;
 }
 
+/** The occupied-tile block inside a building record (see `findFootprintBlock`). */
+export interface FootprintBlock {
+  /** Byte offset of the block's center Vector3. */
+  offset: number;
+  /** Footprint in tiles along world x and z, as placed (rotation already applied). */
+  w: number;
+  h: number;
+}
+
+/**
+ * Find a building's occupied-tile block: center Vector3 (same x and z as the header), size Vector3
+ * in meters, a u8 flag, a u32 tile count, then that many (x, z) tile centers. Every building and
+ * decoration record seen so far has exactly one, after the class name.
+ */
+export function findFootprintBlock(buf: ArrayBuffer, from: number, end: number, x: number, z: number, cellM = 5): FootprintBlock | null {
+  const dv = new DataView(buf);
+  for (let p = from; p + 29 <= end; p++) {
+    if (dv.getFloat32(p, true) !== x || dv.getFloat32(p + 8, true) !== z) continue;
+    const w = dv.getFloat32(p + 12, true) / cellM;
+    const h = dv.getFloat32(p + 20, true) / cellM;
+    const count = dv.getUint32(p + 25, true);
+    if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1 || count !== w * h) continue;
+    if (p + 29 + count * 8 > end) continue;
+    return { offset: p, w, h };
+  }
+  return null;
+}
+
 export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
   const spans = readRecordSpans(buf);
   const first = (id: number) => spans.get(id)?.[0]?.start;
@@ -740,7 +768,14 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
           continue;
         }
         const yaw = 2 * Math.atan2(qy, qw);
-        buildings.push({ typeId, ...toTile(p), rot: ((Math.round(yaw / (Math.PI / 2)) % 4) + 4) % 4, ...(prefab ? { prefab } : {}) });
+        const block = findFootprintBlock(buf, r.pos, span.end, p.x, p.z, cellM);
+        buildings.push({
+          typeId,
+          ...toTile(p),
+          rot: ((Math.round(yaw / (Math.PI / 2)) % 4) + 4) % 4,
+          ...(prefab ? { prefab } : {}),
+          ...(block ? { size: { w: block.w, h: block.h } } : {}),
+        });
       } catch {
         /* not a building record */
       }
