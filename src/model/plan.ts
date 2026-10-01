@@ -26,9 +26,12 @@ export interface Rect {
 }
 
 export interface PlanData {
-  version: 2;
+  /** 3 added `flattened`; 2 added `size`. Older versions still load. */
+  version: 3;
   size: number;
   buildings: Placed[];
+  /** Flattened ground areas, applied in order (each averages the ground's height across it). */
+  flattened: Rect[];
 }
 
 export type NewBuilding = Omit<Placed, 'id'> & { id?: number };
@@ -59,6 +62,8 @@ export function inBounds(r: Rect, size = DEFAULT_SIZE): boolean {
 
 export class Plan {
   buildings: Placed[] = [];
+  /** Flattened ground areas in the order they were made. The controller turns them into `blocked`. */
+  flattened: Rect[] = [];
   private nextId = 1;
   /** Building id occupying each tile, 0 when empty. */
   private occ: Int32Array;
@@ -69,7 +74,7 @@ export class Plan {
    */
   constructor(
     readonly size = DEFAULT_SIZE,
-    readonly blocked: Uint8Array | null = null,
+    private blocked: Uint8Array | null = null,
   ) {
     this.occ = new Int32Array(size * size);
   }
@@ -93,6 +98,11 @@ export class Plan {
     if (x < 0 || y < 0 || x >= this.size || y >= this.size) return undefined;
     const id = this.occ[y * this.size + x];
     return id ? this.get(id) : undefined;
+  }
+
+  /** Swap the terrain mask, e.g. after flattening. Existing buildings stay where they are. */
+  setBlocked(blocked: Uint8Array | null) {
+    this.blocked = blocked;
   }
 
   isBlocked(x: number, y: number): boolean {
@@ -189,7 +199,12 @@ export class Plan {
   }
 
   toJSON(): PlanData {
-    return { version: 2, size: this.size, buildings: this.buildings.map((b) => ({ ...b })) };
+    return {
+      version: 3,
+      size: this.size,
+      buildings: this.buildings.map((b) => ({ ...b })),
+      flattened: this.flattened.map((r) => ({ ...r })),
+    };
   }
 
   /**
@@ -219,6 +234,12 @@ export class Plan {
       }
       plan.add(p, { ignoreTerrain: true });
     }
+    if (Array.isArray(raw?.flattened))
+      for (const f of raw.flattened) {
+        if (!f || typeof f !== 'object') continue;
+        const r = { x: int(f.x), y: int(f.y), w: int(f.w), h: int(f.h) };
+        if (r.w > 0 && r.h > 0 && inBounds(r, plan.size)) plan.flattened.push(r);
+      }
     return plan;
   }
 }

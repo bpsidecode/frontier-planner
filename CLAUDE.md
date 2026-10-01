@@ -37,12 +37,14 @@ Every mutation ends in `changed()`, which runs one recompute pipeline in this or
 Replacing the map goes through `setMapAndPlan()`, which also resets history and the camera.
 
 **`Plan` (`model/plan.ts`) owns the grid.**
-- **Size:** set per plan, 100 by default or the map's size (384 for standard maps, 256 for small ones).
-- **Terrain mask:** an optional `blocked` array marking water and steep tiles.
+- **Size:** set per plan, 100 by default or the map's size (256, 384 or 512 tiles for small, standard and large maps).
+- **Terrain mask:** an optional `blocked` array marking water and steep tiles. The controller sets it with `setBlocked` from the flattened ground (see below), so a plan's mask isn't fixed at construction.
 - **Occupancy:** an `Int32Array` of building ids per tile.
 - **Validation:** `add`, `update` and `rotate` all validate bounds, overlaps and terrain. `ignoreTerrain` is used only when importing or restoring buildings, which may already sit on blocked tiles.
 - **Ids:** `fromJSON` keeps building ids, and undo and redo depend on that to keep the selection.
-- **Saved format:** `PlanData` is version 2 and includes `size`.
+- **Saved format:** `PlanData` is version 3 and includes `size` and `flattened` (the flattened rectangles, in order). Versions 1 and 2 still load.
+
+**Flattening (`model/flatten.ts`)** levels a rectangle to its average height, as the game does. `groundFor(map, plan.flattened)` applies the areas in order to `map.heights` and reclassifies the whole map, giving the effective terrain, shade and blocked mask. `map.terrain`/`map.shade` stay the unflattened originals. In `main.ts`, `syncGround()` runs at the start of `changed()`; it recomputes only when the flattened list changes, repaints the terrain with `renderer.setGround`, and hands the mask to the plan. Undo and redo cover flattening because the areas are part of the plan JSON. Water can't be flattened.
 
 **Desirability rules** are in `model/desirability.ts`, with data from farthestfrontier.wiki:
 - One tile is 5 m. Distances are measured center to center.
@@ -60,6 +62,7 @@ Replacing the map goes through `setMapAndPlan()`, which also resets history and 
 - **Spawn areas:** the spawn-area table in the AnimalManager record is found by scanning (`findSpawnTable`), because the herd records in front of it changed format in v1.1.x. Forageable records use a fixed 417-byte item filler. Boars never have a spawn area in v1.1 saves; see dens below.
 - **Output:** the parser produces a `MapData` (`model/terrain.ts`):
   - `Uint8Array` layers (terrain class, hillshade, fertility, fodder and groundwater, each 0–255)
+  - `heights` in meters (`Float32Array`), used for flattening. Maps stored before heights were kept don't have it, and the Flatten tool asks for a re-import
   - lists of markers, already in tile coordinates
 - **Terrain thresholds:** `WATER_BELOW_M = 3` and `STEEP_M_PER_TILE = 4`. Both have been checked against the game.
 - **Buildings and roads:** any record whose header decodes (id, parent flag, position, quaternion, scale, then a class-name string) and whose class is in `BUILDING_CLASSES` becomes a `SaveBuilding`. Road records contain cubic Bezier splines; the importer samples their centerlines onto the 5 m grid, deduplicates shared cells, and emits 1×1 Road buildings. Records with other layouts (fields, pastures, graveyards, bridges) are counted in `MapData.notImported` by record name; standard building records with an unmapped class are counted in `MapData.unknownBuildingClasses`. `model/mapImport.ts` places imported objects treating game positions as building centers. It picks the planner rotation whose odd/even sides match the center's half/whole-tile offsets, which also handles catalog entries listed as w×h where the game uses h×w. Its report of overlaps and size mismatches is the way to check catalog sizes against a real save.
@@ -76,7 +79,7 @@ Replacing the map goes through `setMapAndPlan()`, which also resets history and 
 - **Camera:** `render/camera.ts` maps tiles to screen pixels, and `fit()` sets the minimum zoom for the grid size.
 
 **Persistence (`storage.ts`, localStorage)**
-- **Keys:** `ff-planner:autosave:v1` holds the plan, `ff-planner:map:v1` the map (about 1 MB, layers stored as base64), and `ff-planner:overlays:v1` the overlay toggles.
+- **Keys:** `ff-planner:autosave:v1` holds the plan, `ff-planner:map:v1` the map (about 1.6 MB for a standard map; layers stored as base64, heights as 16-bit centimeters above −100 m), and `ff-planner:overlays:v1` the overlay toggles.
 - **Export:** JSON exports include the map, so an exported file is self-contained.
 - **Size mismatch:** a saved plan whose size doesn't match the loaded map is discarded.
 

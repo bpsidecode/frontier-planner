@@ -46,7 +46,8 @@ Things to confirm in the game and correct where needed:
   - [ ] **Raider guard towers.** Their records (`raiderGuardTower0`) use a different layout and aren't shown yet.
 - [ ] **Add desirability values for v1.1 buildings.** Still unknown for the Academy. The Pharmacy hasn't appeared in any save yet. Add values in [`src/data/buildings.ts`](src/data/buildings.ts).
   - [x] Confirmed to have no desirability effect: Book Binder, Crypt, Vault, Storage Depots, Guild Hall, Forager Garden, the monuments, the bench plazas, and Crates and Barrels.
-- [ ] **Support terrain flattening.** The game lets you flatten steep ground so you can build on it. The planner needs a way to mark tiles as flattened, so they no longer block placement, and to save that with the plan.
+- [x] **Support terrain flattening.** The Flatten tool (F) levels a dragged rectangle to its average height, as the game does, and re-checks the slopes in and around it. Flattened areas are saved with the plan and can be undone or removed. Maps imported before this change need importing again, because heights weren't kept.
+  - [ ] **Check flattening against the game:** whether it can include water or tiles under buildings (the planner refuses water and allows buildings), and whether the game limits the area's size.
 - [x] **Update the house upgrade desirability requirements to the current game values.** Houses upgrade at 30%, 60%, 80% and 100% (confirmed in-game), set in [`src/data/houses.ts`](src/data/houses.ts).
 - [x] **Add upgrade and downgrade buttons to a building's details panel.** They appear only for confirmed upgrade paths, keep the building's position and rotation, validate footprint changes, and are undoable. Mines and deep mines are separate buildings, not upgrade pairs.
 - [x] **Import every building type.** The Gazebo, Guild Hall, Grand Plaza, Stable, Altar, Pastry Shop, Hospital, Apothecary, Furniture Workshop, monuments and decorations now import.
@@ -60,7 +61,7 @@ Things to confirm in the game and correct where needed:
 ## Features
 
 - **Grid and camera**
-  - The grid is 100×100 tiles, or the map size (384×384) after importing a save.
+  - The grid is 100×100 tiles, or the map size (256, 384 or 512 tiles a side) after importing a save.
   - The mouse wheel zooms toward the cursor.
   - Pan by dragging empty ground, dragging with the right or middle mouse button, or holding Space and dragging.
   - **Reset view** fits the whole grid in the window.
@@ -70,6 +71,7 @@ Things to confirm in the game and correct where needed:
   - Esc or right-click stops placing.
 - **Rotating:** press R or Tab, or use the toolbar button. This works on the preview and on a selected building. A rotated building keeps the same center.
 - **Selecting, moving and deleting:** click a building to select it, drag it to move it, and press Delete or Backspace to remove it. Moves snap to the grid and only happen when the new spot is valid.
+- **Flattening ground:** press F or use **Flatten**, then drag a rectangle over an imported map. The whole area is set to its average height, like the game's flatten tool, so high ground is lowered and low ground raised. While you drag, the panel shows the target height, cut and fill in m³, and how many tiles become buildable or steep. The panel lists the flattened areas so you can remove them, and the tooltip shows each tile's elevation.
 - **Undo and redo:** Ctrl+Z to undo, Ctrl+Shift+Z or Ctrl+Y to redo.
 - **Range display:** a building's range circle only appears while it's selected or being placed. The circle is labeled with the range in meters and says whether the effect at the edge is half or full.
 - **Heatmap**
@@ -95,6 +97,7 @@ What the import brings in:
 - **Terrain**
   - Water and steep ground are drawn on a shaded relief and block building placement. The placement preview turns red there, and a message says why.
   - Water is ground below 3 m. Steep ground rises more than 4 m to a neighboring tile.
+  - Steep ground can be flattened with the Flatten tool (see Features).
 - **Your town:** your buildings become planner buildings at their real position and rotation, so they count toward desirability and population. Roads are reconstructed from their saved curves as editable 1×1 road tiles. You can move or delete imported objects like anything placed in the planner. Crop fields, pastures, graveyards, bridges and a few decorations aren't imported yet; the Map panel lists what was left out.
 - **Overlays:** the Map panel toggles each one. All are on by default, and your choices are remembered.
   - **Minerals:** clay, sand, stone, iron, gold and coal, drawn at their real radius and labeled with the amount (∞ for deep deposits).
@@ -108,7 +111,7 @@ What the import brings in:
 
 The map is saved in the browser with the plan, about 1 MB. **Export** includes the map, so an exported plan file is self-contained. **Remove map** in the Map panel returns to a blank 100×100 plan.
 
-The save parser is a TypeScript port of the relevant parts of [mikh-abc/ff-game-map](https://github.com/mikh-abc/ff-game-map) (Apache-2.0). It's been tested on two v1.1.2a saves: a 384×384 map and a smaller 256×256 alpine map. The spawn-area table is located by scanning, because the herd records in front of it changed shape since that project was written.
+The save parser is a TypeScript port of the relevant parts of [mikh-abc/ff-game-map](https://github.com/mikh-abc/ff-game-map) (Apache-2.0). It's been tested on v1.1.2a saves of all three map sizes: 256×256, 384×384 and 512×512. The spawn-area table is located by scanning, because the herd records in front of it changed shape since that project was written.
 
 ## How desirability is calculated
 

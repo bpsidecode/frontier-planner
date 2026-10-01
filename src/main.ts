@@ -8,7 +8,8 @@ import { GREEN_AT, RED_AT, Renderer, desirabilityColor, layerColor, type Ghost, 
 import { Palette } from './ui/sidebar';
 import { renderStats } from './ui/stats';
 import { exportPlan, loadAutosave, readPlanFile, saveMap, scheduleAutosave } from './storage';
-import { Terrain, blockedMask, type MapData } from './model/terrain';
+import { Terrain, type MapData } from './model/terrain';
+import { groundFor, previewFlatten, type Ground } from './model/flatten';
 import { markersAt } from './model/markers';
 import { importSaveBuildings } from './model/mapImport';
 import { SaveFormatError, isSupportedVersion, parseSave } from './import/sav';
@@ -30,7 +31,9 @@ const renderer = new Renderer(canvas, cam);
 
 const saved = loadAutosave();
 let map: MapData | null = saved.map;
-let blocked: Uint8Array | null = map ? blockedMask(map) : null;
+/** The map's terrain with the plan's flattened areas applied; null without a map. */
+let ground: Ground | null = null;
+let groundKey = '';
 let plan = restorePlan(saved.planData);
 let field: Float32Array = new Float32Array(plan.size * plan.size);
 let houseMap = new Map<number, HouseInfo>();
@@ -42,6 +45,7 @@ interface Placing {
   h: number;
 }
 let placing: Placing | null = null;
+let flattening = false;
 let selectedId: number | null = null;
 let hover: { x: number; y: number } | null = null;
 let view: View = 'desirability';
@@ -53,7 +57,8 @@ let lastPointer: PointerEvent | null = null;
 type Drag =
   | { kind: 'pan'; x: number; y: number; sx: number; sy: number; moved: boolean; button: number }
   | { kind: 'move'; id: number; offX: number; offY: number; before: string; moved: boolean }
-  | { kind: 'paint'; before: string; placed: boolean; lastKey: string };
+  | { kind: 'paint'; before: string; placed: boolean; lastKey: string }
+  | { kind: 'flatten'; x: number; y: number };
 let drag: Drag | null = null;
 
 // ---------- formatting ----------
@@ -79,11 +84,11 @@ function describeEffect(t: BuildingType): string {
 function restorePlan(data: unknown): Plan {
   const size = map?.size ?? 100;
   try {
-    if (data && (((data as { size?: number }).size ?? 100) === size)) return Plan.fromJSON(data, blocked, size);
+    if (data && (((data as { size?: number }).size ?? 100) === size)) return Plan.fromJSON(data, null, size);
   } catch {
     /* fall through */
   }
-  return new Plan(size, blocked);
+  return new Plan(size);
 }
 
 // ---------- history ----------
@@ -99,7 +104,7 @@ function pushUndo(before = snapshot()) {
 }
 
 function restore(s: string) {
-  plan = Plan.fromJSON(JSON.parse(s), blocked, plan.size);
+  plan = Plan.fromJSON(JSON.parse(s), null, plan.size);
   if (selectedId != null && !plan.get(selectedId)) selectedId = null;
   changed();
 }
@@ -120,7 +125,25 @@ function redo() {
 
 // ---------- state updates ----------
 
+/** Recompute the ground when the flattened areas change, and give the plan its terrain mask. */
+function syncGround() {
+  if (!map) {
+    ground = null;
+    groundKey = '';
+    plan.setBlocked(null);
+    return;
+  }
+  const key = JSON.stringify(plan.flattened);
+  if (!ground || key !== groundKey) {
+    ground = groundFor(map, plan.flattened);
+    groundKey = key;
+    renderer.setGround(ground);
+  }
+  plan.setBlocked(ground.blocked);
+}
+
 function changed() {
+  syncGround();
   field = computeField(plan.buildings, plan.size);
   renderer.setField(field, plan.size);
   const houses = evaluateHouses(plan.buildings);
@@ -148,6 +171,7 @@ function draw() {
       showGrid,
       map,
       overlays,
+      flatten: flattening ? { areas: plan.flattened, drag: flattenDragRect(), valid: !flattenPreview()?.problem } : null,
     });
   });
 }
@@ -179,6 +203,7 @@ function ghost(): Ghost | null {
 // ---------- modes & actions ----------
 
 function pickType(typeId: string) {
+  flattening = false;
   const t = getType(typeId);
   const keepRot = placing?.typeId === typeId ? placing.rot : 0;
   placing = { typeId, rot: keepRot, w: t.w, h: t.h };
@@ -192,6 +217,7 @@ function pickType(typeId: string) {
 
 function stopPlacing() {
   placing = null;
+  flattening = false;
   palette.setActive(null);
   canvas.style.cursor = '';
   renderInfo();
@@ -258,6 +284,60 @@ function tryPaint(isClick: boolean) {
   changed();
 }
 
+// ---------- flattening ----------
+
+function toggleFlatten() {
+  if (flattening) return stopPlacing();
+  if (!ground?.heights) {
+    toast(map ? 'Import the save again to flatten: this map was stored before heights were kept' : 'Import a save to flatten its terrain');
+    return;
+  }
+  placing = null;
+  palette.setActive(null);
+  selectedId = null;
+  flattening = true;
+  canvas.style.cursor = 'crosshair';
+  renderInfo();
+  updateToolbar();
+  draw();
+}
+
+/** The rectangle being dragged out in flatten mode, from the drag's start tile to the hovered tile. */
+function flattenDragRect(): Rect | null {
+  if (drag?.kind !== 'flatten' || !hover) return null;
+  const hx = clamp(Math.floor(hover.x), 0, plan.size - 1);
+  const hy = clamp(Math.floor(hover.y), 0, plan.size - 1);
+  const x = Math.min(drag.x, hx);
+  const y = Math.min(drag.y, hy);
+  return { x, y, w: Math.abs(hx - drag.x) + 1, h: Math.abs(hy - drag.y) + 1 };
+}
+
+function flattenPreview() {
+  const r = flattenDragRect();
+  return r && ground ? previewFlatten(ground, plan.size, r) : null;
+}
+
+function finishFlatten() {
+  const r = flattenDragRect();
+  const preview = flattenPreview();
+  if (!r || !preview) return;
+  if (preview.problem) {
+    toast(`Can’t flatten here: ${preview.problem}`);
+    return;
+  }
+  pushUndo();
+  plan.flattened.push(r);
+  changed();
+}
+
+function removeFlattened(index: number | 'all') {
+  if (!plan.flattened.length) return;
+  pushUndo();
+  if (index === 'all') plan.flattened = [];
+  else plan.flattened.splice(index, 1);
+  changed();
+}
+
 /** Why a footprint can't be placed, for the toast. */
 function placeProblem(r: Rect): string {
   if (!inBounds(r, plan.size)) return 'it goes past the edge of the map';
@@ -266,7 +346,7 @@ function placeProblem(r: Rect): string {
   for (let y = r.y; y < r.y + r.h; y++)
     for (let x = r.x; x < r.x + r.w; x++) {
       if (plan.at(x, y)) return 'it overlaps another building';
-      const t = map?.terrain[y * plan.size + x];
+      const t = ground?.terrain[y * plan.size + x];
       water ||= t === Terrain.Water;
       steep ||= t === Terrain.Steep;
     }
@@ -275,7 +355,14 @@ function placeProblem(r: Rect): string {
 
 function updateToolbar() {
   const btn = (a: string) => document.querySelector<HTMLButtonElement>(`[data-act="${a}"]`)!;
-  btn('select').classList.toggle('on', !placing);
+  btn('select').classList.toggle('on', !placing && !flattening);
+  btn('flatten').classList.toggle('on', flattening);
+  btn('flatten').disabled = !map;
+  btn('flatten').title = !map
+    ? 'Import a save to flatten its terrain'
+    : ground?.heights
+      ? 'Flatten ground: drag a rectangle to level it to its average height (F)'
+      : 'This map was stored before heights were kept; import the save again to flatten';
   btn('delete').disabled = selectedId == null;
   btn('rotate').disabled = !placing && selectedId == null;
   btn('undo').disabled = undoStack.length === 0;
@@ -301,7 +388,43 @@ function bindSizeInputs(onChange: (w: number, h: number) => void) {
   hEl.addEventListener('change', fire);
 }
 
+const fmt = (v: number, digits = 1) => v.toLocaleString(undefined, { maximumFractionDigits: digits });
+
+function renderFlattenInfo() {
+  infoTitle.textContent = 'Flatten ground';
+  const p = flattenPreview();
+  const r = flattenDragRect();
+  let html = `<p class="tagnote">Drag a rectangle to set all of it to its average height, as the game does. High ground is lowered and low ground raised, so tiles just outside can get steeper. Water can't be flattened. Esc stops.</p>`;
+  if (r && p) {
+    html += `<div class="card-title">${r.w}×${r.h} tiles</div>`;
+    html += p.problem
+      ? `<p class="neg">Can’t flatten: ${esc(p.problem)}</p>`
+      : `<dl class="kv">
+          <dt>Level</dt><dd><b>${fmt(p.target)} m</b></dd>
+          <dt>Lowered</dt><dd>up to ${fmt(p.maxLower)} m · ${fmt(p.cutM3, 0)} m³ cut</dd>
+          <dt>Raised</dt><dd>up to ${fmt(p.maxRaise)} m · ${fmt(p.fillM3, 0)} m³ fill</dd>
+          <dt>Buildable</dt><dd><span class="pos">+${p.freed}</span> tiles${p.newlySteep ? `, <span class="neg">−${p.newlySteep}</span> become steep` : ''}</dd>
+        </dl>`;
+  }
+  const areas = plan.flattened;
+  html += areas.length
+    ? `<p class="tagnote">Flattened areas, applied in order (each levels the ground left by the ones before it):</p>
+       <ul class="contrib flat-list">${areas
+         .map((a, i) => `<li><span>${a.w}×${a.h} at (${a.x}, ${a.y})</span><button class="btn" data-flat="${i}" title="Undo this flattening">Remove</button></li>`)
+         .join('')}</ul>
+       <div class="actions"><button class="btn danger" data-flat="all">Remove all</button></div>`
+    : '<p class="tagnote">No flattened areas yet.</p>';
+  infoEl.innerHTML = html;
+  infoEl.querySelectorAll<HTMLElement>('[data-flat]').forEach((el) =>
+    el.addEventListener('click', () => {
+      const v = el.dataset.flat!;
+      removeFlattened(v === 'all' ? 'all' : Number(v));
+    }),
+  );
+}
+
 function renderInfo() {
+  if (flattening) return renderFlattenInfo();
   if (placing) {
     const t = getType(placing.typeId);
     infoTitle.textContent = 'Placing';
@@ -409,9 +532,10 @@ function updateTooltip(e: PointerEvent) {
   }
   const i = ty * n + tx;
   let text = `(${tx}, ${ty}) · desirability <b>${pct(field[i])}</b>`;
-  if (map) {
+  if (map && ground) {
+    if (ground.heights) text += `<br>Elevation <b>${ground.heights[i].toFixed(1)} m</b>${plan.flattened.some((a) => tx >= a.x && tx < a.x + a.w && ty >= a.y && ty < a.y + a.h) ? ' (flattened)' : ''}`;
     if (view !== 'desirability') text += `<br>${VIEW_LABEL[view]} <b>${Math.round((map[view][i] / 255) * 100)}%</b>`;
-    const t = map.terrain[i];
+    const t = ground.terrain[i];
     if (t !== Terrain.Land) text += `<br><i>${t === Terrain.Water ? 'Water' : 'Steep ground'}: can’t build</i>`;
     for (const m of markersAt(map, overlays, hover.x, hover.y).slice(0, 6)) text += `<br>${esc(m)}`;
   }
@@ -448,6 +572,12 @@ canvas.addEventListener('pointerdown', (e) => {
     return;
   }
   if (e.button !== 0) return;
+  if (flattening) {
+    drag = { kind: 'flatten', x: clamp(Math.floor(hover.x), 0, plan.size - 1), y: clamp(Math.floor(hover.y), 0, plan.size - 1) };
+    renderInfo();
+    draw();
+    return;
+  }
   if (placing) {
     drag = { kind: 'paint', before: snapshot(), placed: false, lastKey: '' };
     tryPaint(true);
@@ -486,6 +616,8 @@ canvas.addEventListener('pointermove', (e) => {
     }
   } else if (drag?.kind === 'paint') {
     tryPaint(false);
+  } else if (drag?.kind === 'flatten') {
+    renderInfo();
   }
   updateTooltip(e);
   draw();
@@ -493,11 +625,18 @@ canvas.addEventListener('pointermove', (e) => {
 
 function endDrag(e: PointerEvent) {
   if (drag?.kind === 'pan' && drag.button === 2 && !drag.moved) {
-    if (placing) stopPlacing();
+    if (placing || flattening) stopPlacing();
     else select(null);
   }
+  const flattened = drag?.kind === 'flatten' && e.type === 'pointerup';
+  if (flattened) finishFlatten();
+  const wasFlatten = drag?.kind === 'flatten';
   drag = null;
-  canvas.style.cursor = placing ? 'crosshair' : '';
+  if (wasFlatten) {
+    renderInfo();
+    draw();
+  }
+  canvas.style.cursor = placing || flattening ? 'crosshair' : '';
   if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
   updateToolbar();
 }
@@ -552,8 +691,10 @@ window.addEventListener('keydown', (e) => {
     rotate();
   } else if (e.key === 'Escape') {
     if (typing) target.blur();
-    if (placing) stopPlacing();
+    if (placing || flattening) stopPlacing();
     else select(null);
+  } else if (e.key === 'f' || e.key === 'F') {
+    toggleFlatten();
   } else if (e.key === 'Delete' || e.key === 'Backspace') {
     e.preventDefault();
     deleteSelected();
@@ -568,7 +709,7 @@ window.addEventListener('keydown', (e) => {
 window.addEventListener('keyup', (e) => {
   if (e.key === ' ') {
     spaceDown = false;
-    canvas.style.cursor = placing ? 'crosshair' : '';
+    canvas.style.cursor = placing || flattening ? 'crosshair' : '';
   }
 });
 
@@ -609,8 +750,9 @@ document.querySelectorAll<HTMLButtonElement>('#view-seg [data-view]').forEach((b
 /** Swap in a new map (or none) and plan, resetting history and the camera. */
 function setMapAndPlan(nextMap: MapData | null, nextPlan: Plan) {
   map = nextMap;
-  blocked = map ? blockedMask(map) : null;
+  ground = null;
   plan = nextPlan;
+  flattening = false;
   selectedId = null;
   undoStack.length = 0;
   redoStack.length = 0;
@@ -631,14 +773,13 @@ fileInput.addEventListener('change', async () => {
   try {
     const next = await readPlanFile(file);
     if (next.map) {
-      const nextBlocked = blockedMask(next.map);
-      setMapAndPlan(next.map, Plan.fromJSON(next.planData, nextBlocked, next.map.size));
+      setMapAndPlan(next.map, Plan.fromJSON(next.planData, null, next.map.size));
     } else if (map && ((next.planData as { size?: number }).size ?? 100) !== map.size) {
       // A plan made without a map: drop the map and go back to its own grid.
       setMapAndPlan(null, Plan.fromJSON(next.planData));
     } else {
       pushUndo();
-      plan = Plan.fromJSON(next.planData, blocked, plan.size);
+      plan = Plan.fromJSON(next.planData, null, plan.size);
       selectedId = null;
       changed();
     }
@@ -703,6 +844,7 @@ function renderMap() {
 const actions: Record<string, () => void> = {
   select: stopPlacing,
   rotate,
+  flatten: toggleFlatten,
   delete: deleteSelected,
   undo,
   redo,

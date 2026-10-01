@@ -81,6 +81,13 @@ export interface Ghost {
   valid: boolean;
 }
 
+/** Flatten mode: the areas already flattened and the one being dragged out. */
+export interface FlattenScene {
+  areas: Rect[];
+  drag: Rect | null;
+  valid: boolean;
+}
+
 export interface Scene {
   size: number;
   buildings: Placed[];
@@ -91,6 +98,7 @@ export interface Scene {
   showGrid: boolean;
   map: MapData | null;
   overlays: Set<string>;
+  flatten: FlattenScene | null;
 }
 
 function makeCanvas(size: number): HTMLCanvasElement {
@@ -156,13 +164,20 @@ export class Renderer {
   setMap(map: MapData | null) {
     this.map = map;
     this.layers.clear();
-    this.terrain = map
-      ? paint(map.size, (i) => {
-          const base = TERRAIN_BASE[map.terrain[i]];
-          const k = map.terrain[i] === Terrain.Water ? 1 : 0.72 + (map.shade[i] / 255) * 0.56;
-          return [Math.min(255, base[0] * k), Math.min(255, base[1] * k), Math.min(255, base[2] * k), 255];
-        })
-      : null;
+    this.setGround(map);
+  }
+
+  /** Repaint the terrain image, e.g. after flattening changes the slopes and shading. */
+  setGround(ground: { terrain: Uint8Array; shade: Uint8Array } | null) {
+    const size = this.map?.size;
+    this.terrain =
+      ground && size
+        ? paint(size, (i) => {
+            const base = TERRAIN_BASE[ground.terrain[i]];
+            const k = ground.terrain[i] === Terrain.Water ? 1 : 0.72 + (ground.shade[i] / 255) * 0.56;
+            return [Math.min(255, base[0] * k), Math.min(255, base[1] * k), Math.min(255, base[2] * k), 255];
+          })
+        : null;
   }
 
   private layer(view: LayerView): HTMLCanvasElement | null {
@@ -203,6 +218,8 @@ export class Renderer {
 
     const sel = scene.selectedId != null ? scene.buildings.find((b) => b.id === scene.selectedId) : undefined;
     if (sel) this.drawRadius(sel);
+
+    if (scene.flatten) this.drawFlatten(scene.flatten);
 
     if (scene.ghost) {
       const g = scene.ghost;
@@ -394,6 +411,29 @@ export class Renderer {
       ctx.strokeStyle = '#5b4a0f';
       ctx.lineWidth = 1.5;
       ctx.strokeRect(p.x - h, p.y - h, h * 2, h * 2);
+    }
+  }
+
+  private drawFlatten(f: FlattenScene) {
+    const { ctx } = this;
+    ctx.save();
+    ctx.setLineDash([6, 4]);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = '#7c2d12';
+    ctx.fillStyle = 'rgba(194,120,62,0.12)';
+    for (const a of f.areas) {
+      const r = this.rectToScreen(a);
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.strokeRect(r.x + 0.75, r.y + 0.75, r.w - 1.5, r.h - 1.5);
+    }
+    ctx.restore();
+    if (f.drag) {
+      const r = this.rectToScreen(f.drag);
+      ctx.fillStyle = f.valid ? 'rgba(194,120,62,0.35)' : 'rgba(220,38,38,0.35)';
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.strokeStyle = f.valid ? '#9a3412' : '#b91c1c';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2);
     }
   }
 

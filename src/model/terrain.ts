@@ -68,6 +68,8 @@ export interface MapData {
   size: number;
   /** Row-major size×size layers. */
   terrain: Uint8Array;
+  /** Ground height in meters, row-major. Missing on maps stored before heights were kept. */
+  heights?: Float32Array;
   /** Hillshade, 0–255 (128 = flat). */
   shade: Uint8Array;
   /** 0–255 = 0–100%. */
@@ -89,11 +91,12 @@ export interface MapData {
 
 export type LayerView = 'fertility' | 'fodder' | 'water';
 
-/** Classify tiles from a row-major height grid (meters). Water wins over steep. */
-export function classifyTerrain(heights: Float32Array, size: number): Uint8Array {
-  const out = new Uint8Array(size * size);
-  for (let y = 0; y < size; y++)
-    for (let x = 0; x < size; x++) {
+/** Classify tiles from a row-major height grid (meters), `width` wide. Water wins over steep. */
+export function classifyTerrain(heights: Float32Array, width: number, rows = width): Uint8Array {
+  const size = width;
+  const out = new Uint8Array(width * rows);
+  for (let y = 0; y < rows; y++)
+    for (let x = 0; x < width; x++) {
       const i = y * size + x;
       const h = heights[i];
       if (h < WATER_BELOW_M) {
@@ -104,7 +107,7 @@ export function classifyTerrain(heights: Float32Array, size: number): Uint8Array
       if (x > 0) rise = Math.max(rise, Math.abs(heights[i - 1] - h));
       if (x < size - 1) rise = Math.max(rise, Math.abs(heights[i + 1] - h));
       if (y > 0) rise = Math.max(rise, Math.abs(heights[i - size] - h));
-      if (y < size - 1) rise = Math.max(rise, Math.abs(heights[i + size] - h));
+      if (y < rows - 1) rise = Math.max(rise, Math.abs(heights[i + size] - h));
       if (rise > STEEP_M_PER_TILE) out[i] = Terrain.Steep;
     }
   return out;
@@ -145,6 +148,7 @@ const LAYERS = ['terrain', 'shade', 'fertility', 'fodder', 'water'] as const;
 export function serializeMap(map: MapData): object {
   const out: Record<string, unknown> = { ...map };
   for (const k of LAYERS) out[k] = toBase64(map[k]);
+  if (map.heights) out.heights = toBase64(new Uint8Array(encodeHeights(map.heights).buffer));
   return out;
 }
 
@@ -159,6 +163,9 @@ export function deserializeMap(raw: unknown): MapData | null {
     if (!bytes || bytes.length !== size * size) return null;
     (map as unknown as Record<string, Uint8Array>)[k] = bytes;
   }
+  const hb = typeof o.heights === 'string' ? fromBase64(o.heights) : null;
+  if (hb && hb.length === size * size * 2) map.heights = decodeHeights(new Uint16Array(hb.buffer));
+  else delete map.heights;
   for (const k of ['minerals', 'forageables', 'spawns', 'enemies', 'ruins', 'fertilityBonus', 'buildings'] as const)
     if (!Array.isArray(map[k])) (map as unknown as Record<string, unknown[]>)[k] = [];
   // Maps saved before all buildings were imported stored { kind: 'townCenter' | 'shelter', x, y }.
@@ -172,6 +179,18 @@ export function deserializeMap(raw: unknown): MapData | null {
   if (!map.notImported || typeof map.notImported !== 'object') map.notImported = {};
   if (!map.unknownBuildingClasses || typeof map.unknownBuildingClasses !== 'object') map.unknownBuildingClasses = {};
   return map;
+}
+
+// Heights are stored as whole centimeters above −100 m in 16 bits (−100 m to 555 m), half the size
+// of float32. Maps seen so far span about −9 m to 180 m.
+const HEIGHT_OFFSET_M = 100;
+
+function encodeHeights(h: Float32Array): Uint16Array {
+  return Uint16Array.from(h, (v) => Math.max(0, Math.min(65535, Math.round((v + HEIGHT_OFFSET_M) * 100))));
+}
+
+function decodeHeights(q: Uint16Array): Float32Array {
+  return Float32Array.from(q, (v) => v / 100 - HEIGHT_OFFSET_M);
 }
 
 function toBase64(bytes: Uint8Array): string {

@@ -206,7 +206,7 @@ describe.skipIf(!realPath)('real save file', () => {
   const map = realPath ? parseSave(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer, 'real.sav') : null!;
 
   it('parses the map with resources, all markers inside the grid', () => {
-    expect([256, 384]).toContain(map.size);
+    expect([256, 384, 512]).toContain(map.size);
     // Unity positions at the exact map edge can pick up tiny float32 roundoff.
     const inside = (p: { x: number; y: number }) => p.x >= -0.001 && p.y >= -0.001 && p.x <= map.size + 0.001 && p.y <= map.size + 0.001;
     for (const [name, list] of Object.entries({

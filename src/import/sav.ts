@@ -754,6 +754,7 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
     name: fileName.replace(/\.sav$/i, ''),
     version,
     size: N,
+    heights,
     terrain: classifyTerrain(heights, N),
     shade: hillshade(heights, N, cellM),
     fertility,
