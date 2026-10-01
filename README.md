@@ -14,12 +14,11 @@ FF_SAV=/path/to/save.sav npm test   # also check the parser against a real save
 Things to confirm in the game and correct where needed:
 
 - [ ] **Check the remaining guessed building sizes.** These have no confirmed footprint, so their sizes are guesses. They're marked `sizeUnverified` in [`src/data/buildings.ts`](src/data/buildings.ts) and shown with `*` in the app.
-  - [ ] Treasury (3×4). This size fits where the game centers it in a save, but it isn't confirmed.
   - [ ] Hedge Garden (3×3), Topiary Garden (3×3)
   - [ ] Trellis (1×2)
-  - [ ] Civic Monument, Military Monument (imported as 5×5). The save shows both sides are odd.
+  - [x] Vault 3×4 (the save calls it `Treasury`), Civic and Military Monuments 5×5
   - [x] Rose Bush, Low Brush, Tall Brush (1×1), confirmed by the decoration test row
-  - [ ] Guard towers are imported as the 1×1 Lookout Tower. They sit on wall tiles, and 1×1 is the only size that doesn't collide with the walls around them.
+  - [x] Lookout, Watch and Battlement Towers are all 1×1, and they don't sit on wall tiles.
 - [x] **Confirm building sizes in-game (v1.1).** Confirmed and updated in the catalog:
   - [x] Academy 4×5, Book Binder 2×3, Crypt 3×3, Storage Depot 2×3
   - [x] Library 4×3, Theater 5×5, Temple 5×5, Guild Hall 5×4, Apothecary 2×3, Barracks 6×4
@@ -27,12 +26,12 @@ Things to confirm in the game and correct where needed:
   - [x] Paper Mill 4×4, Furniture Workshop 5×3, Forester Camp 3×3, Large Goat Barn 4×3
   - [x] Rose Garden 2×3, Gazebo Plaza 4×4, Grand Plaza 5×5
 - [x] **Check whether houses have a starting desirability.** Confirmed they don't: houses start at 0%, as the planner assumes.
-- [ ] **Decide whether Extravagant decorations need their own entries.** They aren't listed separately, because the wiki says they behave exactly like their base versions.
+- [x] **Extravagant decorations don't need their own entries.** They behave exactly like their base versions.
 - [x] **Check the imported map's orientation against the in-game map.** Confirmed correct. The planner mirrors the game's x axis, as [ff-game-map](https://github.com/mikh-abc/ff-game-map) does, so lakes and your town should appear where they are in the game.
 - [x] **Check the terrain thresholds.** Both were calibrated on two saves and live in [`src/model/terrain.ts`](src/model/terrain.ts).
   - [x] Water is ground below 3 m (`WATER_BELOW_M`). Confirmed, and it holds on the alpine map too: its lakes sit at −7 m.
   - [x] Steep, unbuildable ground rises more than 4 m per tile (`STEEP_M_PER_TILE`). Confirmed it matches the game. If the game lets you build somewhere the planner blocks, raise it. If the planner allows spots the game refuses, lower it.
-- [ ] **Decide which fertility layer to show.** The Fertility view uses the save's environmental fertility, as ff-game-map does. The save also has a current-fertility layer, which drops as fields are farmed.
+- [x] **Show environmental fertility.** The Fertility view uses the save's environmental fertility, as ff-game-map does, not the current-fertility layer that drops as fields are farmed.
 - [x] **Show more forageables.** Berries, nuts, mushrooms and eggs are included alongside greens, herbs, roots and willow.
 - [x] **Check boar spawns.** Boars have no spawn areas in v1.1 saves. They spawn from boar dens, which the save stores in the same record type as wolf dens. The Boar toggle shows boar dens, and the Enemies group shows only wolf dens.
 - [ ] **Import all buildings from a save.** Most are done: building classes and prefab ids map to planner buildings with their position and rotation (`BUILDING_CLASSES` and `PREFAB_TYPES` in [`src/import/sav.ts`](src/import/sav.ts)). On the original Lametree save that's 1,182 buildings, with 2 skipped because they touch a neighbor. Still to do:
@@ -45,13 +44,14 @@ Things to confirm in the game and correct where needed:
   - [ ] **Bridges.**
   - [x] **Wide gates.** Gates centered as if two tiles wide import as the 2×1 Wide Gate (6 in the Lametree save).
   - [ ] **Raider guard towers.** Their records (`raiderGuardTower0`) use a different layout and aren't shown yet.
-- [ ] **Add desirability values for v1.1 buildings.** The Academy, Book Binder, Crypt, Treasury, Storage Depots, Guild Hall, Forager Garden, the monuments, the bench plazas and Crates and Barrels are in the catalog without desirability values, as they aren't on the wiki. The Pharmacy hasn't appeared in any save yet. Add values in [`src/data/buildings.ts`](src/data/buildings.ts).
+- [ ] **Add desirability values for v1.1 buildings.** Still unknown for the Academy. The Pharmacy hasn't appeared in any save yet. Add values in [`src/data/buildings.ts`](src/data/buildings.ts).
+  - [x] Confirmed to have no desirability effect: Book Binder, Crypt, Vault, Storage Depots, Guild Hall, Forager Garden, the monuments, the bench plazas, and Crates and Barrels.
 - [ ] **Support terrain flattening.** The game lets you flatten steep ground so you can build on it. The planner needs a way to mark tiles as flattened, so they no longer block placement, and to save that with the plan.
 - [x] **Update the house upgrade desirability requirements to the current game values.** Houses upgrade at 30%, 60%, 80% and 100% (confirmed in-game), set in [`src/data/houses.ts`](src/data/houses.ts).
 - [x] **Add upgrade and downgrade buttons to a building's details panel.** They appear only for confirmed upgrade paths, keep the building's position and rotation, validate footprint changes, and are undoable. Mines and deep mines are separate buildings, not upgrade pairs.
 - [x] **Import every building type.** The Gazebo, Guild Hall, Grand Plaza, Stable, Altar, Pastry Shop, Hospital, Apothecary, Furniture Workshop, monuments and decorations now import.
   - [x] Unrecognized building classes are listed with their occurrence counts in the Map panel.
-- [x] **Fix sideways Barracks.** The game's unrotated Barracks is 6×4, not 4×6, as the side-by-side pairs showed: each pair was placed touching, so the gap between centers is the building's width. Barracks, Fort and Barn (all even on both sides, where rotation can't be deduced from the center) now use the game's orientation, as do the Hunter Cabin, Firewood Splitter, Fletcher, Forager, Armory, Blacksmith, Foundry, Stable and Goat Barn.
+- [x] **Fix sideways Barracks.** The game's unrotated Barracks is 6×4, not 4×6, as the side-by-side pairs showed: each pair was placed touching, so the gap between centers is the building's width. Barracks, Fort and Barn (all even on both sides, where rotation can't be deduced from the center) now use the game's orientation, as do the Hunter Cabin, Firewood Splitter, Fletcher, Forager, Armory, Blacksmith, Foundry, Stable, Goat Barn and Arborist Building (4×2).
 - [x] **Build all buildings and their upgrades side by side in a test save.**
 - [ ] **Reflect tech tree improvements,** mainly the ones that raise desirability.
 - [x] **Tell fences apart from palisade walls.** Prefab ids separate palisade walls from fences, fieldstone, hedge and wrought iron fences, and their gates. The original Lametree town has 462 palisade wall tiles and 317 fence tiles.

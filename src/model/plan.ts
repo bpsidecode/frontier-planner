@@ -1,4 +1,4 @@
-import { BUILDING_BY_ID, getType } from '../data/buildings';
+import { BUILDING_BY_ID, canonicalTypeId, getType } from '../data/buildings';
 
 /** Grid size of a plan without an imported map. */
 export const DEFAULT_SIZE = 100;
@@ -202,15 +202,17 @@ export class Plan {
     if (!Array.isArray(list)) throw new Error('Not a planner file');
     const plan = new Plan(size ?? (Number.isInteger(raw?.size) ? raw!.size! : DEFAULT_SIZE), blocked);
     for (const b of list) {
-      if (!b || typeof b !== 'object' || !BUILDING_BY_ID[b.typeId]) continue;
+      if (!b || typeof b !== 'object') continue;
+      const typeId = canonicalTypeId(String(b.typeId));
+      if (!BUILDING_BY_ID[typeId]) continue;
       const p: NewBuilding = {
         id: int(b.id),
-        typeId: b.typeId,
+        typeId,
         x: int(b.x),
         y: int(b.y),
         rot: ((int(b.rot) % 4) + 4) % 4,
       };
-      const v = getType(b.typeId).variable;
+      const v = getType(typeId).variable;
       if (v && b.w != null && b.h != null) {
         p.w = clamp(int(b.w), v.min, v.max);
         p.h = clamp(int(b.h), v.min, v.max);

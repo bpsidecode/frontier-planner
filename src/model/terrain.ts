@@ -1,5 +1,7 @@
 // Imported game map: terrain classification, layers and resource markers, all in tile coordinates.
 
+import { canonicalTypeId } from '../data/buildings';
+
 /** Heights below this (meters) are water. Calibrated on a v1.1.2 save: every cell below ~3 m has zero fertility and shoreline. */
 export const WATER_BELOW_M = 3;
 /** A rise steeper than this (meters per 5 m tile, to any neighbor) counts as unbuildable slope. Existing towns top out around 3.5. */
@@ -164,7 +166,7 @@ export function deserializeMap(raw: unknown): MapData | null {
   map.buildings = map.buildings
     .map((b) => {
       const o = b as unknown as Record<string, unknown>;
-      return { typeId: String(o.typeId ?? legacy[String(o.kind)] ?? ''), x: Number(o.x), y: Number(o.y), rot: Number(o.rot ?? 0) };
+      return { typeId: canonicalTypeId(String(o.typeId ?? legacy[String(o.kind)] ?? '')), x: Number(o.x), y: Number(o.y), rot: Number(o.rot ?? 0) };
     })
     .filter((b) => b.typeId);
   if (!map.notImported || typeof map.notImported !== 'object') map.notImported = {};

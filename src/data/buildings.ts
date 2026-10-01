@@ -98,22 +98,20 @@ add('Amenities', 'Grand Theater', 5, 5, [0.08, 400, 'Theater']);
 add('Amenities', 'Festival Pole', 4, 4, [0.04, 180, 'FestivalPole']);
 add('Amenities', 'Paved Festival Pole', 4, 4, [0.08, 180, 'FestivalPole']);
 add('Amenities', 'Apothecary Shop', 2, 3);
-// Added in game v1.1 and not on the wiki. Academy, Book Binder and Crypt sizes are confirmed in-game;
-// the Treasury's fits the save's building centers but is unconfirmed.
+// Added in game v1.1 and not on the wiki; sizes confirmed in-game. The Book Binder, Crypt, Guild Hall and
+// monuments have no desirability effect (confirmed); the Academy's is still unknown.
 add('Amenities', 'Academy', 4, 5);
 add('Amenities', 'Book Binder', 2, 3);
 add('Amenities', 'Crypt', 3, 3);
-add('Amenities', 'Treasury', 3, 4, null, unverified);
 add('Amenities', 'Guild Hall', 5, 4);
-// Monuments are new in v1.1; the save shows both sides are odd, but the exact size is unconfirmed.
-add('Amenities', 'Civic Monument', 5, 5, null, unverified);
-add('Amenities', 'Military Monument', 5, 5, null, unverified);
+add('Amenities', 'Civic Monument', 5, 5);
+add('Amenities', 'Military Monument', 5, 5);
 add('Amenities', 'Rat Catcher', 2, 2);
 add('Amenities', 'Trading Post', 4, 5);
 add('Amenities', 'Trading Center', 4, 5);
 add('Amenities', 'Graveyard', 3, 3, null, { variable: { min: 3, max: 10 } });
 
-// Decorations (Extravagant variants behave identically to their base versions)
+// Decorations (Extravagant variants behave identically to their base versions, so they share entries)
 add('Decorations', 'Large Paved Park', 5, 5, [0.12, 200, 'Decorations']);
 add('Decorations', 'Large Park', 5, 5, [0.08, 200, 'Decorations']);
 add('Decorations', 'Small Paved Park', 3, 3, [0.09, 120, 'Decorations']);
@@ -163,7 +161,7 @@ add('Food', 'Large Goat Barn', 4, 3, [-0.3, 50]);
 add('Food', 'Chicken Coop', 2, 4, [-0.1, 30, 'ChickenCoop']);
 add('Food', 'Smokehouse', 2, 2, [-0.15, 40, 'SmokeHouse']);
 add('Food', 'Windmill', 3, 3, [-0.15, 50]);
-add('Food', 'Arborist Building', 2, 4);
+add('Food', 'Arborist Building', 4, 2);
 add('Food', 'Cheesemaker', 3, 3);
 add('Food', 'Fishing Shack', 2, 3);
 add('Food', 'Forager Shack', 3, 2);
@@ -223,6 +221,7 @@ add('Storage', 'Stockyard', 4, 4);
 add('Storage', 'Large Stockyard', 4, 4);
 add('Storage', 'Storehouse', 3, 4);
 add('Storage', 'Warehouse', 3, 4);
+// The save class is `Treasury`; the game calls it the Vault. No desirability effect (confirmed).
 add('Storage', 'Vault', 3, 4);
 add('Storage', 'Granary', 2, 2);
 add('Storage', 'Root Cellar', 2, 3);
@@ -309,6 +308,13 @@ for (const [from, to] of UPGRADE_PATHS) {
   if (!base || !BUILDING_BY_ID[to]) throw new Error(`Unknown upgrade path: ${from} -> ${to}`);
   base.upgradeTo = to;
   DOWNGRADE_BY_ID[to] = from;
+}
+
+/** Catalog ids that were renamed, so older plans and stored maps still load. */
+const RENAMED_IDS: Record<string, string> = { treasury: 'vault' };
+
+export function canonicalTypeId(id: string): string {
+  return RENAMED_IDS[id] ?? id;
 }
 
 export function getType(id: string): BuildingType {

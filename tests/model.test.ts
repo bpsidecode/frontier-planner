@@ -180,3 +180,10 @@ describe('house levels', () => {
     expect(s.byLevel.find((l) => l.level.name === 'Mansion')!.count).toBe(1);
   });
 });
+
+describe('renamed catalog ids', () => {
+  it('loads a saved Treasury as the Vault', () => {
+    const plan = Plan.fromJSON({ version: 2, size: 20, buildings: [{ id: 1, typeId: 'treasury', x: 2, y: 2, rot: 0 }] });
+    expect(plan.buildings.map((b) => b.typeId)).toEqual(['vault']);
+  });
+});

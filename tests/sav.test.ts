@@ -91,9 +91,10 @@ function syntheticSave(): ArrayBuffer {
   // id, hasParent, pad, position, quaternion (x, y, z, w), scale, class name, then building data.
   const tc = new Writer().u32(42).u8(0).u8(0).point(10, 10).f32(0).f32(0).f32(0).f32(1).f32(1).f32(1).f32(1).str('TownCenter').zeros(32);
   record(out, 'townCenter', 3556611327, tc);
-  // A cabin rotated 90° (quaternion y = w = √½) at a half-tile center, and an unknown class that must be ignored.
+  // A cabin rotated 90° (quaternion y = w = √½) at a half-tile center, an unknown class that is reported, and a tree that is neither imported nor reported.
   const s = Math.SQRT1_2;
   record(out, 'hunterBuilding', 1, new Writer().u32(43).u8(0).u8(0).point(7.5, 12.5).f32(0).f32(s).f32(0).f32(s).f32(1).f32(1).f32(1).str('HunterBuilding').zeros(32));
+  record(out, 'treeResource', 2, new Writer().u32(45).u8(0).u8(0).point(5, 5).f32(0).f32(0).f32(0).f32(1).f32(1).f32(1).f32(1).str('TreeResource').zeros(32));
   record(out, 'mysteryBuilding', 2, new Writer().u32(44).u8(0).u8(0).point(5, 5).f32(0).f32(0).f32(0).f32(1).f32(1).f32(1).f32(1).str('Mystery').zeros(32));
   // A straight road spline across the bottom row. The importer turns the continuous curve into
   // four editable 1×1 Road objects, one for each crossed grid cell.

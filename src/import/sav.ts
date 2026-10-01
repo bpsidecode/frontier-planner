@@ -127,7 +127,7 @@ export const BUILDING_CLASSES: Record<string, string> = {
   GoatBarn: 'goat-barn',
   GoldMine: 'gold-mine',
   Granary: 'granary',
-  // Towers sit on wall tiles; 1×1 is the only size that doesn't collide with the walls around them.
+  // All tower tiers are 1×1 (confirmed); prefab ids pick the tier.
   GuardTower: 'lookout-tower',
   GuildHall: 'guild-hall',
   HealersHouse: 'healers-house',
@@ -160,7 +160,7 @@ export const BUILDING_CLASSES: Record<string, string> = {
   Temple: 'temple',
   Theater: 'theater',
   TradingPost: 'trading-post',
-  Treasury: 'treasury',
+  Treasury: 'vault',
   Urn: 'flower-urn',
   WagonShop: 'wagon-shop',
   Wall: 'palisade-wall',
@@ -279,6 +279,9 @@ export const PREFAB_TYPES: Record<string, string> = {
   '0d68253d-4d23-42bd-9092-dcfc4a8ec970': 'gazebo-plaza',
   '2991ffa0-d738-4717-95fb-de141924839f': 'grand-plaza',
 };
+
+/** Classes with a building-style header that aren't player buildings (trees, stones, fish, carts). */
+const isNonBuildingClass = (cls: string) => cls.endsWith('Resource') || cls === 'SupplyWagon';
 
 /** Save records (by name prefix) that are player-built but not imported yet. */
 const NOT_IMPORTED: Record<string, string> = {
@@ -733,7 +736,7 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
         const typeId = (prefab && PREFAB_TYPES[prefab]) || BUILDING_CLASSES[cls];
         if (!typeId) {
           if (cls === 'Decorations') notImported['Other decorations'] = (notImported['Other decorations'] ?? 0) + 1;
-          else unknownBuildingClasses[cls] = (unknownBuildingClasses[cls] ?? 0) + 1;
+          else if (!isNonBuildingClass(cls)) unknownBuildingClasses[cls] = (unknownBuildingClasses[cls] ?? 0) + 1;
           continue;
         }
         const yaw = 2 * Math.atan2(qy, qw);
