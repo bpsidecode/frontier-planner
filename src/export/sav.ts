@@ -1,8 +1,8 @@
 // Write planner changes back into a copy of the original .sav. Supported: moves and rotations of
 // buildings imported from that save, each a fixed-size patch inside the building's own record
 // (header position and rotation, plus the occupied-tile block), which in-game tests showed is all
-// the game needs; and moves of crop fields and pastures, which shift every coordinate in the
-// record (header, tile list, crop plants) plus the copies herds keep of their pasture. Everything
+// the game needs; and moves of crop fields, pastures and graveyards, which shift every coordinate
+// in the record (center, corner, tile list, crop plants) plus the copies herds keep of their pasture. Everything
 // else is reported as not written.
 
 import { BUILDING_BY_ID, getType } from '../data/buildings';
@@ -36,10 +36,14 @@ export class SaveMismatchError extends Error {}
 const AREA_LABELS: Record<string, string> = {
   'crop-field': 'Crop fields imported before moves could be written (import the save again)',
   pasture: 'Pastures imported before moves could be written (import the save again)',
-  graveyard: 'Moved or resized graveyards',
+  graveyard: 'Graveyards imported before moves could be written (import the save again)',
   bridge: 'Moved bridge tiles',
 };
-const RESIZED_LABELS: Record<string, string> = { 'crop-field': 'Resized crop fields', pasture: 'Resized pastures' };
+const RESIZED_LABELS: Record<string, string> = {
+  'crop-field': 'Resized crop fields',
+  pasture: 'Resized pastures',
+  graveyard: 'Resized graveyards',
+};
 
 /** Compare the plan with the save it was imported from. */
 export function planSaveExport(plan: { buildings: Placed[]; flattened: Rect[] }, map: MapData): SaveExport {

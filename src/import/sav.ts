@@ -412,7 +412,12 @@ function findSpawnTable(buf: ArrayBuffer, start: number, end: number, maxKey: nu
  * columns, rows and the half-size offsets (−cols·cell/2, 0.5, −rows·cell/2), five more bytes, a u32
  * count, then that many (x, z) pairs. Every one seen so far is a full rectangle.
  */
-export function readAreaTiles(buf: ArrayBuffer, start: number, end: number, cellM = 5): { x: number; z: number }[] | null {
+export function readAreaTiles(
+  buf: ArrayBuffer,
+  start: number,
+  end: number,
+  cellM = 5,
+): { tiles: { x: number; z: number }[]; grid: number } | null {
   const dv = new DataView(buf);
   const f = (o: number) => dv.getFloat32(o, true);
   const u = (o: number) => dv.getUint32(o, true);
@@ -425,7 +430,7 @@ export function readAreaTiles(buf: ArrayBuffer, start: number, end: number, cell
     const count = u(p + 29);
     const first = p + 33;
     if (count < 1 || count > cols * rows || first + count * 8 > end) return null;
-    return Array.from({ length: count }, (_, k) => ({ x: f(first + k * 8), z: f(first + k * 8 + 4) }));
+    return { tiles: Array.from({ length: count }, (_, k) => ({ x: f(first + k * 8), z: f(first + k * 8 + 4) })), grid: p };
   }
   return null;
 }
@@ -780,29 +785,29 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
       const typeId = AREA_TYPES[span.name];
       if (!typeId) continue;
       areaRecords.add(span);
-      const area = readAreaTiles(buf, span.start, span.end, cellM);
-      if (!area) {
+      const found = readAreaTiles(buf, span.start, span.end, cellM);
+      if (!found) {
         notImported[`Unreadable ${typeId.replace('-', ' ')}s`] = (notImported[`Unreadable ${typeId.replace('-', ' ')}s`] ?? 0) + 1;
         continue;
       }
-      const cols = area.map((t) => (worldM - t.x) / cellM - 0.5);
-      const rows = area.map((t) => t.z / cellM - 0.5);
+      const cols = found.tiles.map((t) => (worldM - t.x) / cellM - 0.5);
+      const rows = found.tiles.map((t) => t.z / cellM - 0.5);
       const x0 = Math.round(Math.min(...cols));
       const y0 = Math.round(Math.min(...rows));
       const w = Math.round(Math.max(...cols)) - x0 + 1;
       const h = Math.round(Math.max(...rows)) - y0 + 1;
       const b: SaveBuilding = { typeId, x: x0 + w / 2, y: y0 + h / 2, rot: 0, size: { w, h } };
-      // Fields and pastures start with u32 id, a 4, then the area's center: keep where, for writing moves back.
+      // Keep where the record and its center (x, y, z) are, for writing moves back. Fields and
+      // pastures start with u32 id, a 4, then the center; a graveyard has its corner first. The
+      // center always comes before the grid block (the tile list after it holds similar numbers).
       const dv = new DataView(buf);
       const centerX = worldM - b.x * cellM;
       const centerZ = b.y * cellM;
-      if (
-        typeId !== 'graveyard' &&
-        dv.getUint8(span.start + 4) === 4 &&
-        Math.abs(dv.getFloat32(span.start + 5, true) - centerX) < 0.01 &&
-        Math.abs(dv.getFloat32(span.start + 13, true) - centerZ) < 0.01
-      )
-        b.area = { start: span.start, end: span.end, pos: span.start + 5 };
+      for (let o = span.start; o + 12 <= found.grid; o++)
+        if (Math.abs(dv.getFloat32(o, true) - centerX) < 0.01 && Math.abs(dv.getFloat32(o + 8, true) - centerZ) < 0.01) {
+          b.area = { start: span.start, end: span.end, pos: o };
+          break;
+        }
       buildings.push(b);
     }
 

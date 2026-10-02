@@ -403,12 +403,14 @@ describe.skipIf(!realPath)('real save file', () => {
     }
   });
 
-  it('writes crop field and pasture moves back by shifting their records', () => {
+  it('writes crop field, pasture and graveyard moves back by shifting their records', () => {
     const plan = importSaveBuildings(map).plan;
-    const zones = plan.buildings.filter((b) => (b.typeId === 'crop-field' || b.typeId === 'pasture') && b.src && map.buildings[b.src.i].area);
+    plan.setBlocked(null);
+    const areaTypes = ['crop-field', 'pasture', 'graveyard'];
+    const zones = plan.buildings.filter((b) => areaTypes.includes(b.typeId) && b.src && map.buildings[b.src.i].area);
     if (!zones.length) return; // this save has no fields or pastures
     const moved: typeof zones = [];
-    for (const typeId of ['crop-field', 'pasture'])
+    for (const typeId of areaTypes)
       for (const z of zones.filter((b) => b.typeId === typeId)) {
         const f = footprint(z);
         // Diagonally clear of the old spot, so no coordinate that should have moved can still read
@@ -423,6 +425,11 @@ describe.skipIf(!realPath)('real save file', () => {
     expect(moved.length).toBeGreaterThan(0);
     const ex = planSaveExport(plan, map);
     expect(ex.edits.filter((e) => e.kind === 'area')).toHaveLength(moved.length);
+    // A moved graveyard carries its crypt, which is written back as a building move.
+    const yard = moved.find((z) => z.typeId === 'graveyard');
+    const crypt = plan.buildings.find((b) => b.typeId === 'crypt' && b.src);
+    if (yard && crypt) expect(ex.edits.find((e) => e.i === crypt.src!.i)).toMatchObject({ kind: 'building', typeId: 'crypt' });
+    console.log('moved', moved.map((z) => z.typeId).join(', '), '· edits', ex.edits.map((e) => e.typeId).join(', '));
 
     const src = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
     const out = writeSaveEdits(src, map, ex.edits);
@@ -458,10 +465,13 @@ describe.skipIf(!realPath)('real save file', () => {
     }
     // Outside the moved records, only exact copies of a moved header position change (a herd's
     // copy of its pasture): each a run of at most 12 bytes that now equals the new header position.
-    const recs = ex.edits.map((e) => map.buildings[e.i].area!);
+    const recs = ex.edits.filter((e) => e.kind === 'area').map((e) => map.buildings[e.i].area!);
+    // Buildings moved along with a zone (a graveyard's crypt) change their header and tile block.
+    const carried = ex.edits.filter((e) => e.kind === 'building').map((e) => map.buildings[e.i].rec!);
+    const inCarried = (k: number) => carried.some((r) => (k >= r.pos && k < r.pos + 28) || (k >= r.block && k < r.block + 29 + 8 * new DataView(src).getUint32(r.block + 25, true)));
     const headers = recs.map((r) => Array.from(o.subarray(r.pos, r.pos + 12)).join(','));
     for (let k = 0; k < a.length; k++) {
-      if (a[k] === o[k] || recs.some((r) => k >= r.start && k < r.end)) continue;
+      if (a[k] === o[k] || recs.some((r) => k >= r.start && k < r.end) || inCarried(k)) continue;
       const run = Array.from({ length: 12 }, (_, d) => k - d).some((s) => s >= 0 && headers.includes(Array.from(o.subarray(s, s + 12)).join(',')));
       expect(run, `byte ${k} changed outside the moved records`).toBe(true);
     }

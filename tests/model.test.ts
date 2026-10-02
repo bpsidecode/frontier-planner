@@ -217,11 +217,22 @@ describe('placement rules', () => {
     // The crypt can move within the graveyard but not out of it.
     expect(plan.update(crypt.id, { x: 2, y: 3 })).toBe(true);
     expect(plan.update(crypt.id, { x: 3 })).toBe(false);
-    // The graveyard can't move or shrink away from its crypt, but can grow.
-    expect(plan.update(yard.id, { x: 5 })).toBe(false);
+    // The graveyard can't shrink away from its crypt, but can grow.
     expect(plan.update(yard.id, { w: 4 })).toBe(false);
     expect(plan.get(yard.id)).toMatchObject({ x: 0, w: 5, h: 6 });
     expect(plan.update(yard.id, { w: 8 })).toBe(true);
+    // Moving the graveyard carries its crypt along.
+    expect(plan.update(yard.id, { x: 5, y: 2 })).toBe(true);
+    expect(plan.get(crypt.id)).toMatchObject({ x: 7, y: 5 });
+    expect(plan.at(8, 6)?.id).toBe(crypt.id);
+    expect(plan.at(3, 4)).toBeUndefined();
+    // ...unless the crypt's new spot is taken; then nothing moves.
+    const wall = plan.add({ typeId: 'fence', x: 17, y: 6, rot: 0 })!;
+    expect(wall).not.toBeNull();
+    expect(plan.update(yard.id, { x: 15 })).toBe(false);
+    expect(plan.get(yard.id)).toMatchObject({ x: 5, y: 2 });
+    expect(plan.get(crypt.id)).toMatchObject({ x: 7, y: 5 });
+    expect(plan.at(8, 6)?.id).toBe(crypt.id);
     // Saved and imported crypts are trusted.
     expect(plan.add({ typeId: 'crypt', x: 12, y: 12, rot: 0 }, { ignoreTerrain: true })).not.toBeNull();
   });

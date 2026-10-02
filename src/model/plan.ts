@@ -73,6 +73,11 @@ export function isZone(typeId: string): boolean {
   return !!BUILDING_BY_ID[typeId]?.zone;
 }
 
+/** Whether rectangle `inner` lies entirely inside `outer`. */
+export function contains(outer: Rect, inner: Rect): boolean {
+  return inner.x >= outer.x && inner.y >= outer.y && inner.x + inner.w <= outer.x + outer.w && inner.y + inner.h <= outer.y + outer.h;
+}
+
 export function inBounds(r: Rect, size = DEFAULT_SIZE): boolean {
   return r.x >= 0 && r.y >= 0 && r.x + r.w <= size && r.y + r.h <= size;
 }
@@ -137,11 +142,7 @@ export class Plan {
 
   /** Whether a footprint lies entirely inside one zone of the given type (e.g. a graveyard). */
   insideZone(r: Rect, zoneType: string): boolean {
-    return this.buildings.some((z) => {
-      if (z.typeId !== zoneType) return false;
-      const f = footprint(z);
-      return r.x >= f.x && r.y >= f.y && r.x + r.w <= f.x + f.w && r.y + r.h <= f.y + f.h;
-    });
+    return this.buildings.some((z) => z.typeId === zoneType && contains(footprint(z), r));
   }
 
   /**
@@ -192,17 +193,36 @@ export class Plan {
     const before = { x: b.x, y: b.y, rot: b.rot, w: b.w, h: b.h };
     // Buildings that must stand inside a zone (crypts) and currently do.
     const dependents = zone ? this.buildings.filter((d) => this.ruleHolds(d)) : [];
+    // A zone moved without resizing carries the buildings that must stand inside it (a graveyard's crypt).
+    const dx = next.x - b.x;
+    const dy = next.y - b.y;
+    const sameShape = next.w === b.w && next.h === b.h && next.rot === b.rot;
+    const carried =
+      zone && sameShape && (dx || dy)
+        ? dependents.filter((d) => BUILDING_BY_ID[d.typeId].within === b.typeId && contains(old, footprint(d)))
+        : [];
+    const carriedFrom = carried.map((d) => ({ d, x: d.x, y: d.y }));
     Object.assign(b, changes);
     // Zones can overlap, so clearing one's old tiles could clear a neighbor's: restamp them all.
     if (zone) {
-      if (!dependents.every((d) => this.ruleHolds(d))) {
-        // Don't move or shrink a graveyard out from under its crypt.
+      const undo = () => {
         Object.assign(b, before);
         if (before.w === undefined) delete b.w;
         if (before.h === undefined) delete b.h;
+        for (const c of carriedFrom) Object.assign(c.d, { x: c.x, y: c.y });
+        this.rebuild();
         return false;
-      }
+      };
       this.rebuild();
+      for (const d of carried) {
+        const r = { ...footprint(d), x: d.x + dx, y: d.y + dy };
+        if (!this.canPlace(r, d.id, false, d.typeId)) return undo();
+        this.stamp(footprint(d), 0);
+        Object.assign(d, { x: r.x, y: r.y });
+        this.stamp(r, d.id);
+      }
+      // Don't move or shrink a graveyard out from under its crypt.
+      if (!dependents.every((d) => this.ruleHolds(d))) return undo();
     } else {
       this.stamp(old, 0);
       this.stamp(r, id);
