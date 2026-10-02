@@ -243,6 +243,16 @@ export const PREFAB_TYPES: Record<string, string> = {
   '4aa6d551-fca5-4454-94e9-9bb91bf81e2e': 'civic-monument',
   '0bffb5aa-f886-409a-9ad4-c4491a1a5b1a': 'military-monument',
   'b95af9c7-e1a0-4e99-b1de-744a41e03bdd': 'economic-monument',
+  // Extravagant decorations (EconMon save) share their base version's entry. Records hold no item
+  // list, so these are matched by record structure; all four 1×1s also share a type code (0x771)
+  // no base decoration uses.
+  '68184683-9245-4acb-830f-2e8ab44f6ea3': 'rose-garden', // 3×2, identified by the user
+  '992cd89f-295d-496e-a85d-ba13f42c7148': 'small-corner-bench-plaza', // same part as the corner bench plaza
+  '10f62a80-fe2f-427c-b38a-ab6669f24c80': 'small-corner-bench-plaza',
+  // Laid out like both the Small Plaza and the Small Bench Plaza, which the data can't tell apart;
+  // neither affects desirability, so the split is a guess with no effect on results.
+  '36dee76a-1f08-45e5-a5a7-a735f693e530': 'small-plaza',
+  'b6dcf861-ee54-4beb-ad59-07172bf3b78f': 'small-bench-plaza',
   // Deep mines (Lametree_deepmines save). Deep mines share the regular mine's class; deep clay and
   // sand mines have their own (ClayPit, SandPit). No deep iron mine was built yet: see DEEP_MINES.
   '2ec91b53-96b9-4138-86e7-2e7c0f623343': 'deep-coal-mine',

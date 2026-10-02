@@ -42,8 +42,8 @@ Things to confirm in the game and correct where needed:
   - [ ] **Unidentified decorations** (imported as nothing yet, counted under "Other decorations"). These are probably the Extravagant versions of other decorations; once each is matched to its base, map its prefab id to the base entry, since Extravagant decorations share their base's catalog entry:
     - `fe6ea4b5…` (1×1), between the corner bench plazas and the medium plazas in the test row
     - `1935626f…` (2×2), in the original town at tile (163, 217)
-    - `68184683…` (3×2, two of them, one turned) and `62548091…` (3×1), near tile (175, 230) in the EconMon save
-    - `36dee76a…`, `10f62a80…`, `b6dcf861…` and `992cd89f…` (1×1 each), a 2×2 block at tiles (224–225, 222) and (224–225, 225) in the EconMon save
+    - `62548091…` (3×1), at tile (178, 232) in the EconMon save. It has 26 parts where the garden path and trail have 14, so it's probably one of their Extravagant versions; the two have different desirability.
+  - [x] **Extravagant decorations matched so far** (EconMon save). Records carry no item list, so they're matched by record structure: `68184683…` (3×2) is the Extravagant Rose Garden; `992cd89f…` and `10f62a80…` have the corner bench plaza's part and map to it; `36dee76a…` and `b6dcf861…` are laid out like the Small Plaza and Small Bench Plaza, which the data can't tell apart and which have no desirability, so they're split between the two.
   - [x] **Deep mines.** Deep coal and gold mines share the regular mine's class and are told apart by prefab id; deep clay and sand mines have their own classes (`ClayPit`, `SandPit`). A mine whose record has a 3×3 footprint imports as the deep variant even without a known prefab id, which covers the Deep Iron Mine (not built in any save yet).
   - [ ] **Deep Iron Mine prefab id.** None of the saves has one built yet.
   - [x] **Economic Monument** (5×5, `economicMonument` record, class `Monument`).
