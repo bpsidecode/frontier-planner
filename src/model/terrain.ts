@@ -61,6 +61,13 @@ export interface SaveBuilding {
   prefab?: string;
   /** Footprint in tiles as placed (rotation applied), from the record's occupied-tile block. */
   size?: { w: number; h: number };
+  /**
+   * Byte offsets in the save of the header position (x, y, z, then the rotation quaternion) and of
+   * the occupied-tile block, for writing moves and rotations back. Roads don't have one.
+   */
+  rec?: { pos: number; block: number };
+  /** Set by the importer when the building couldn't be placed (it overlapped another one). */
+  skipped?: boolean;
 }
 
 export interface MapData {
@@ -175,7 +182,14 @@ export function deserializeMap(raw: unknown): MapData | null {
   map.buildings = map.buildings
     .map((b) => {
       const o = b as unknown as Record<string, unknown>;
-      return { typeId: canonicalTypeId(String(o.typeId ?? legacy[String(o.kind)] ?? '')), x: Number(o.x), y: Number(o.y), rot: Number(o.rot ?? 0) };
+      const out: SaveBuilding = { typeId: canonicalTypeId(String(o.typeId ?? legacy[String(o.kind)] ?? '')), x: Number(o.x), y: Number(o.y), rot: Number(o.rot ?? 0) };
+      if (typeof o.prefab === 'string') out.prefab = o.prefab;
+      const size = o.size as SaveBuilding['size'];
+      if (size && Number.isInteger(size.w) && Number.isInteger(size.h)) out.size = { w: size.w, h: size.h };
+      const rec = o.rec as SaveBuilding['rec'];
+      if (rec && Number.isInteger(rec.pos) && Number.isInteger(rec.block)) out.rec = { pos: rec.pos, block: rec.block };
+      if (o.skipped === true) out.skipped = true;
+      return out;
     })
     .filter((b) => b.typeId);
   if (!map.notImported || typeof map.notImported !== 'object') map.notImported = {};

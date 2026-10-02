@@ -750,6 +750,7 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
         if (parent > 1) continue;
         if (parent) r.skip(41);
         r.skip(1);
+        const headerPos = r.pos;
         const p = r.point();
         r.skip(4); // quaternion x
         const qy = r.f32();
@@ -774,7 +775,7 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
           ...toTile(p),
           rot: ((Math.round(yaw / (Math.PI / 2)) % 4) + 4) % 4,
           ...(prefab ? { prefab } : {}),
-          ...(block ? { size: { w: block.w, h: block.h } } : {}),
+          ...(block ? { size: { w: block.w, h: block.h }, rec: { pos: headerPos, block: block.offset } } : {}),
         });
       } catch {
         /* not a building record */

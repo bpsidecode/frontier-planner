@@ -47,11 +47,14 @@ export function saveMap(map: MapData | null): boolean {
 /** Plans export with their map so the file is self-contained. */
 export function exportPlan(plan: Plan, map: MapData | null) {
   const data = { ...plan.toJSON(), ...(map ? { map: serializeMap(map) } : {}) };
-  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+  downloadBlob(new Blob([JSON.stringify(data)], { type: 'application/json' }), `farthest-frontier-plan-${stamp}.json`);
+}
+
+export function downloadBlob(blob: Blob, fileName: string) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-  a.download = `farthest-frontier-plan-${stamp}.json`;
+  a.download = fileName;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }

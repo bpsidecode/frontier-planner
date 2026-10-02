@@ -33,30 +33,34 @@ export function importSaveBuildings(map: MapData): ImportReport {
   const bump = (o: Record<string, number>, k: string) => (o[k] = (o[k] ?? 0) + 1);
 
   // Big buildings first, so a mis-sized small one can't block them.
-  const ordered = [...map.buildings]
-    .filter((b) => BUILDING_BY_ID[b.typeId])
-    .sort((a, b) => area(b.typeId) - area(a.typeId));
+  const ordered = map.buildings
+    .map((b, i) => ({ b, i }))
+    .filter(({ b }) => BUILDING_BY_ID[b.typeId])
+    .sort((a, b) => area(b.b.typeId) - area(a.b.typeId));
 
-  for (const b of ordered) {
+  for (const { b, i } of ordered) {
     const fits = (typeId: string, rot: number) => {
       const t = getType(typeId);
       const s = rotatedSize(t.w, t.h, rot);
       return (s.w % 2 === 1) === isHalf(b.x) && (s.h % 2 === 1) === isHalf(b.y);
     };
+    // Keep the game's full rotation (0–3): a building turned 180° looks the same in the planner, but
+    // writing it back must keep its door on the same side.
     let typeId = b.typeId;
-    let rot = b.rot % 2;
+    let rot = ((b.rot % 4) + 4) % 4;
     const variant = SIZE_VARIANTS[typeId];
-    if (!fits(typeId, rot) && !fits(typeId, 1 - rot) && variant) typeId = variant;
+    if (!fits(typeId, rot) && !fits(typeId, rot + 1) && variant) typeId = variant;
     if (!fits(typeId, rot)) {
-      if (fits(typeId, 1 - rot)) rot = 1 - rot;
+      if (fits(typeId, rot + 1)) rot = (rot + 1) % 4;
       else bump(report.sizeMismatch, typeId);
     }
     const t = getType(typeId);
     const s = rotatedSize(t.w, t.h, rot);
-    const placed = plan.add(
-      { typeId, x: Math.round(b.x - s.w / 2), y: Math.round(b.y - s.h / 2), rot },
-      { ignoreTerrain: true },
-    );
+    const x = Math.round(b.x - s.w / 2);
+    const y = Math.round(b.y - s.h / 2);
+    const placed = plan.add({ typeId, x, y, rot, src: { i, typeId, x, y, rot } }, { ignoreTerrain: true });
+    if (placed) delete b.skipped;
+    else b.skipped = true;
     bump(placed ? report.imported : report.overlapping, typeId);
   }
   return report;

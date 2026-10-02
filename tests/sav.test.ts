@@ -7,6 +7,7 @@ import { markersAt } from '../src/model/markers';
 import { Terrain, classifyTerrain, deserializeMap, serializeMap } from '../src/model/terrain';
 import { importSaveBuildings } from '../src/model/mapImport';
 import { footprint } from '../src/model/plan';
+import { SaveMismatchError, planSaveExport, writeSaveEdits } from '../src/export/sav';
 
 // ---------- synthetic save builder ----------
 
@@ -91,12 +92,13 @@ function syntheticSave(): ArrayBuffer {
   // id, hasParent, pad, position, quaternion (x, y, z, w), scale, class name, then building data.
   const tc = new Writer().u32(42).u8(0).u8(0).point(10, 10).f32(0).f32(0).f32(0).f32(1).f32(1).f32(1).f32(1).str('TownCenter').zeros(32);
   record(out, 'townCenter', 3556611327, tc);
-  // A cabin rotated 90° (quaternion y = w = √½) at a half-tile center, an unknown class that is reported, and a tree that is neither imported nor reported.
-  // The cabin's occupied-tile block comes after some unrelated bytes: center, size (10 × 15 m: 2 × 3 tiles as placed), flag, count, tile centers.
+  // A cabin rotated 90° (quaternion y = w = √½), an unknown class that is reported, and a tree that is neither imported nor reported.
+  // Turned sideways the cabin is 2 × 3 tiles, so its center sits on a tile edge across and mid-tile down.
+  // Its occupied-tile block comes after some unrelated bytes: center, size (10 × 15 m), flag, count, tile centers.
   const s = Math.SQRT1_2;
-  const cabin = new Writer().u32(43).u8(0).u8(0).point(7.5, 12.5).f32(0).f32(s).f32(0).f32(s).f32(1).f32(1).f32(1).str('HunterBuilding').zeros(7);
-  cabin.point(7.5, 12.5).f32(10).f32(1).f32(15).u8(1).u32(6);
-  for (const z of [7.5, 12.5, 17.5]) for (const x of [5, 10]) cabin.f32(x).f32(z);
+  const cabin = new Writer().u32(43).u8(0).u8(0).point(10, 12.5).f32(0).f32(s).f32(0).f32(s).f32(1).f32(1).f32(1).str('HunterBuilding').zeros(7);
+  cabin.point(10, 12.5).f32(10).f32(1).f32(15).u8(1).u32(6);
+  for (const z of [7.5, 12.5, 17.5]) for (const x of [7.5, 12.5]) cabin.f32(x).f32(z);
   record(out, 'hunterBuilding', 1, cabin.zeros(8));
   record(out, 'treeResource', 2, new Writer().u32(45).u8(0).u8(0).point(5, 5).f32(0).f32(0).f32(0).f32(1).f32(1).f32(1).f32(1).str('TreeResource').zeros(32));
   record(out, 'mysteryBuilding', 2, new Writer().u32(44).u8(0).u8(0).point(5, 5).f32(0).f32(0).f32(0).f32(1).f32(1).f32(1).f32(1).str('Mystery').zeros(32));
@@ -161,7 +163,7 @@ describe('save parser (synthetic)', () => {
     expect(iron).toMatchObject({ x: 3, y: 1, r: 0.5, amount: 500, deep: true });
     expect(map.buildings).toEqual([
       { typeId: 'town-center', x: 2, y: 2, rot: 0 },
-      { typeId: 'hunter-cabin', x: 2.5, y: 2.5, rot: 1, size: { w: 2, h: 3 } },
+      { typeId: 'hunter-cabin', x: 2, y: 2.5, rot: 1, size: { w: 2, h: 3 }, rec: { pos: expect.any(Number), block: expect.any(Number) } },
       { typeId: 'road', x: 0.5, y: 3.5, rot: 0 },
       { typeId: 'road', x: 1.5, y: 3.5, rot: 0 },
       { typeId: 'road', x: 2.5, y: 3.5, rot: 0 },
@@ -182,6 +184,94 @@ describe('save parser (synthetic)', () => {
 
   it('rejects files that are not saves', () => {
     expect(() => parseSave(new Uint8Array([1, 0, 0, 0, 128, 7, 0, 0, 65]).buffer)).toThrow();
+  });
+});
+
+describe('save export (synthetic)', () => {
+  const buf = syntheticSave();
+  const fresh = () => {
+    const map = parseSave(buf, 'Test.sav');
+    const plan = importSaveBuildings(map).plan;
+    plan.setBlocked(null);
+    // Clear the imported road tiles so the cabin has room to move and turn.
+    for (const r of plan.buildings.filter((b) => b.typeId === 'road')) plan.remove(r.id);
+    const cabin = plan.buildings.find((b) => b.typeId === 'hunter-cabin')!;
+    return { map, plan, cabin };
+  };
+  const f32 = (b: ArrayBuffer, o: number) => new DataView(b).getFloat32(o, true);
+
+  it('finds nothing to write in an unchanged plan', () => {
+    const map = parseSave(buf, 'Test.sav');
+    const plan = importSaveBuildings(map).plan;
+    expect(planSaveExport(plan, map)).toEqual({ edits: [], notWritten: {}, needsReimport: false });
+  });
+
+  it('writes a move into the building header and its tile block', () => {
+    const { map, plan, cabin } = fresh();
+    expect(footprint(cabin)).toEqual({ x: 1, y: 1, w: 2, h: 3 });
+    expect(plan.update(cabin.id, { x: 0 })).toBe(true);
+    const ex = planSaveExport(plan, map);
+    expect(ex.edits).toHaveLength(1);
+    expect(ex.edits[0]).toMatchObject({ rotated: false, rect: { x: 0, y: 1, w: 2, h: 3 } });
+    expect(ex.notWritten).toEqual({ 'Deleted road tiles': 2 });
+
+    const out = writeSaveEdits(buf, map, ex.edits);
+    expect(out.byteLength).toBe(buf.byteLength);
+    const back = parseSave(out, 'Test.sav');
+    const moved = back.buildings.find((b) => b.typeId === 'hunter-cabin')!;
+    expect(moved).toMatchObject({ x: 1, y: 2.5, rot: 1, size: { w: 2, h: 3 } });
+    // Tile centers: rows by world z, each row in world x ascending (planner columns 1 then 0).
+    const { block } = moved.rec!;
+    const tiles = Array.from({ length: 6 }, (_, k) => [f32(out, block + 29 + k * 8), f32(out, block + 33 + k * 8)]);
+    expect(tiles).toEqual([[12.5, 7.5], [17.5, 7.5], [12.5, 12.5], [17.5, 12.5], [12.5, 17.5], [17.5, 17.5]]);
+    // The original buffer is untouched.
+    expect(parseSave(buf, 'Test.sav').buildings.find((b) => b.typeId === 'hunter-cabin')!.x).toBe(2);
+  });
+
+  it('writes a rotation as an upright quarter turn and swaps the block size', () => {
+    const { map, plan, cabin } = fresh();
+    expect(plan.rotate(cabin.id)).toBe(true);
+    const ex = planSaveExport(plan, map);
+    expect(ex.edits).toMatchObject([{ rot: 2, rotated: true }]);
+    const out = writeSaveEdits(buf, map, ex.edits);
+    const turned = parseSave(out, 'Test.sav').buildings.find((b) => b.typeId === 'hunter-cabin')!;
+    expect(turned).toMatchObject({ rot: 2, size: { w: 3, h: 2 } });
+    const { pos } = turned.rec!;
+    expect(f32(out, pos + 12)).toBe(0);
+    expect(f32(out, pos + 16)).toBeCloseTo(1, 6); // yaw 180°: qy = sin 90°
+    expect(f32(out, pos + 24)).toBeCloseTo(0, 6);
+  });
+
+  it('refuses a file that is not the imported save', () => {
+    const { map, plan, cabin } = fresh();
+    plan.update(cabin.id, { x: 0 });
+    const ex = planSaveExport(plan, map);
+    const other = writeSaveEdits(buf, map, ex.edits); // the cabin is no longer where the import found it
+    expect(() => writeSaveEdits(other, map, ex.edits)).toThrow(SaveMismatchError);
+  });
+
+  it('lists the changes it cannot write back', () => {
+    const { map, plan, cabin } = fresh();
+    expect(plan.add({ typeId: 'small-plaza', x: 0, y: 0, rot: 0 })).not.toBeNull();
+    plan.replaceType(cabin.id, 'hunter-lodge');
+    plan.flattened.push({ x: 0, y: 0, w: 2, h: 2 });
+    const ex = planSaveExport(plan, map);
+    expect(ex.edits).toEqual([]);
+    expect(ex.notWritten).toEqual({
+      'Added buildings': 1,
+      'Upgraded or downgraded buildings': 1,
+      'Deleted road tiles': 2,
+      'Flattened areas': 1,
+    });
+    plan.remove(cabin.id);
+    expect(planSaveExport(plan, map).notWritten['Deleted buildings']).toBe(1);
+  });
+
+  it('asks for a re-import when the map has no record positions', () => {
+    const map = parseSave(buf, 'Test.sav');
+    const plan = importSaveBuildings(map).plan;
+    for (const b of map.buildings) delete b.rec;
+    expect(planSaveExport(plan, map).needsReimport).toBe(true);
   });
 });
 
@@ -249,6 +339,45 @@ describe.skipIf(!realPath)('real save file', () => {
     console.log('footprints checked', checked);
     expect(checked).toBeGreaterThan(0);
     expect(Object.fromEntries(wrong)).toEqual({});
+  });
+
+  it('writes moved and rotated buildings back without disturbing anything else', () => {
+    const plan = importSaveBuildings(map).plan;
+    plan.setBlocked(null);
+    const tryMove = (pick: (b: (typeof plan.buildings)[number]) => boolean) => {
+      for (const b of plan.buildings.filter(pick))
+        for (let d = 1; d <= 8; d++)
+          for (const [dx, dy] of [[d, 0], [-d, 0], [0, d], [0, -d]])
+            if (plan.update(b.id, { x: b.x + dx, y: b.y + dy })) return b;
+      return null;
+    };
+    const well = tryMove((b) => b.typeId === 'basic-well' && !!b.src);
+    const turned = plan.buildings.find((b) => {
+      const f = footprint(b);
+      return b.src && f.w !== f.h && b.typeId !== 'road' && plan.rotate(b.id);
+    });
+    expect(well).toBeTruthy();
+    expect(turned).toBeTruthy();
+    const ex = planSaveExport(plan, map);
+    expect(ex.edits.map((e) => e.i).sort()).toEqual([well!.src!.i, turned!.src!.i].sort());
+
+    const out = writeSaveEdits(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer, map, ex.edits);
+    const back = parseSave(out, 'real.sav');
+    expect(back.buildings).toHaveLength(map.buildings.length);
+    const changed = new Set(ex.edits.map((e) => e.i));
+    back.buildings.forEach((b, i) => {
+      const a = map.buildings[i];
+      // The importer marks buildings it couldn't place; a fresh parse has no such flag.
+      const { skipped: _skipped, ...original } = a;
+      if (!changed.has(i)) expect(b, `building ${i}`).toEqual(original);
+    });
+    for (const e of ex.edits) {
+      const b = back.buildings[e.i];
+      expect(b.x).toBeCloseTo(e.rect.x + e.rect.w / 2, 3);
+      expect(b.y).toBeCloseTo(e.rect.y + e.rect.h / 2, 3);
+      expect(b.rot).toBe(e.rot);
+      expect(b.size).toEqual({ w: e.rect.w, h: e.rect.h });
+    }
   });
 
   it('imports the town onto land', () => {

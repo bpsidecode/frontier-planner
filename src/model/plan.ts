@@ -16,6 +16,16 @@ export interface Placed {
   /** Size override for variable-size buildings (unrotated). */
   w?: number;
   h?: number;
+  /** For buildings imported from a save: their index in `MapData.buildings` and how they were first placed. */
+  src?: ImportSource;
+}
+
+export interface ImportSource {
+  i: number;
+  typeId: string;
+  x: number;
+  y: number;
+  rot: number;
 }
 
 export interface Rect {
@@ -227,6 +237,9 @@ export class Plan {
         y: int(b.y),
         rot: ((int(b.rot) % 4) + 4) % 4,
       };
+      const s = b.src as Partial<ImportSource> | undefined;
+      if (s && typeof s === 'object' && typeof s.typeId === 'string')
+        p.src = { i: int(s.i), typeId: s.typeId, x: int(s.x), y: int(s.y), rot: ((int(s.rot) % 4) + 4) % 4 };
       const v = getType(typeId).variable;
       if (v && b.w != null && b.h != null) {
         p.w = clamp(int(b.w), v.min, v.max);

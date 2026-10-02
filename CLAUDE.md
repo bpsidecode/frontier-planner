@@ -19,7 +19,7 @@ Never commit save files; `.gitignore` excludes `*.sav` and `test-fixtures/`. To 
 
 ## Architecture
 
-**Model modules are pure and DOM-free**, so they run in vitest's Node environment. These are `src/model/*`, `src/data/*` and `src/import/sav.ts`. Only `main.ts`, `render/*`, `ui/*` and `storage.ts` touch the DOM.
+**Model modules are pure and DOM-free**, so they run in vitest's Node environment. These are `src/model/*`, `src/data/*`, `src/import/sav.ts` and `src/export/sav.ts`. Only `main.ts`, `render/*`, `ui/*` and `storage.ts` touch the DOM.
 
 **`src/main.ts` is the single controller and holds all app state.** This includes:
 - `plan`, `map`, `view` and `overlays`
@@ -35,6 +35,8 @@ Every mutation ends in `changed()`, which runs one recompute pipeline in this or
 6. `draw()`, batched with `requestAnimationFrame`
 
 Replacing the map goes through `setMapAndPlan()`, which also resets history and the camera.
+
+**Don't use `confirm()` or `alert()`.** Embedded browsers such as the desktop app's browser pane suppress native dialogs (`confirm()` returns false without showing anything), and a file picker opened after a slow native answer loses its user activation. Use `ask()` from `ui/dialog.ts`, an in-page `<dialog>`; open file pickers right after it resolves.
 
 **`Plan` (`model/plan.ts`) owns the grid.**
 - **Size:** set per plan, 100 by default or the map's size (256, 384 or 512 tiles for small, standard and large maps).
@@ -65,10 +67,12 @@ Replacing the map goes through `setMapAndPlan()`, which also resets history and 
   - `heights` in meters (`Float32Array`), used for flattening. Maps stored before heights were kept don't have it, and the Flatten tool asks for a re-import
   - lists of markers, already in tile coordinates
 - **Terrain thresholds:** `WATER_BELOW_M = 3` and `STEEP_M_PER_TILE = 4`. Both have been checked against the game.
-- **Buildings and roads:** any record whose header decodes (id, parent flag, position, quaternion, scale, then a class-name string) and whose class is in `BUILDING_CLASSES` becomes a `SaveBuilding`. Road records contain cubic Bezier splines; the importer samples their centerlines onto the 5 m grid, deduplicates shared cells, and emits 1×1 Road buildings. Records with other layouts (fields, pastures, graveyards, bridges) are counted in `MapData.notImported` by record name; standard building records with an unmapped class are counted in `MapData.unknownBuildingClasses`. `model/mapImport.ts` places imported objects treating game positions as building centers. It picks the planner rotation whose odd/even sides match the center's half/whole-tile offsets, which also handles catalog entries listed as w×h where the game uses h×w. Its report of overlaps and size mismatches is the way to check catalog sizes against a real save.
+- **Buildings and roads:** any record whose header decodes (id, parent flag, position, quaternion, scale, then a class-name string) and whose class is in `BUILDING_CLASSES` becomes a `SaveBuilding`. Road records contain cubic Bezier splines; the importer samples their centerlines onto the 5 m grid, deduplicates shared cells, and emits 1×1 Road buildings. Records with other layouts (fields, pastures, graveyards, bridges) are counted in `MapData.notImported` by record name; standard building records with an unmapped class are counted in `MapData.unknownBuildingClasses`. `model/mapImport.ts` places imported objects treating game positions as building centers. It keeps the game's full rotation (0–3, so a 180° turn survives for writing back), turning a quarter only if the footprint's odd/even sides wouldn't match the center's half/whole-tile offsets. Each placed building gets `src` (its `MapData.buildings` index and how it was first placed), and buildings that couldn't be placed are marked `skipped` on the map. Its report of overlaps and size mismatches is a quick check of catalog sizes against a real save.
 - **Variants and tiers:** upgrades share a class with their base building (a Market Square is a `MarketBuilding`). Each `<name>Guids` record (type id `Guids`) lists every instance's prefab id in record-index order (`well3` → entry 3). `PREFAB_TYPES` maps known prefab ids to catalog ids and overrides `BUILDING_CLASSES`. To label a new variant, build the base and upgraded versions side by side in-game and diff their prefab ids.
 - **Dens:** `wolfDen` records hold both wolf dens and boar dens (class `BoarDen`). Boar dens are the boar spawns (`SpawnArea` with `den: true`).
 - **Keep `Terrain` a regular `enum`.** A `const enum` breaks under Vite's per-file transpilation.
+
+**Save export (`export/sav.ts`)** writes moves and rotations back into a copy of the original save, which the user picks again at export time (the 30 MB file isn't stored). Each `SaveBuilding.rec` holds the byte offsets of its header position and its occupied-tile block. `planSaveExport` compares each planner building with its `src` and lists what can't be written (added, deleted, upgraded, roads, flattening). `writeSaveEdits` checks every touched record is where the import found it (`SaveMismatchError` otherwise), then rewrites the header position (height from `map.heights`), the rotation as an upright yaw when it changed, and the block's center, size and tile centers (rows by world z, each row in world x ascending). Moving and rotating this way were confirmed in-game: the game rebuilds everything else on load.
 
 **Overlays** are identified by keys of the form `group:kind`, such as `mineral:iron` or `forage:herbs`. The keys, labels and colors are defined once in `data/overlays.ts`, and the renderer, the Map panel (`ui/mapPanel.ts`) and the tooltip (`model/markers.ts`) all use them. To add a kind, add it to three places: the parser's lookup (e.g. `FORAGE_ITEMS`), the union type in `terrain.ts`, and `OVERLAY_GROUPS`.
 

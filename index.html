@@ -41,11 +41,13 @@
           <button data-act="fit" title="Fit the whole grid in view">Reset view</button>
           <span class="spacer"></span>
           <button data-act="import-save" title="Import terrain and resources from a Farthest Frontier .sav file">Import save</button>
+          <button data-act="export-save" title="Write moved and rotated buildings back into a copy of the imported save">Export .sav</button>
           <button data-act="export" title="Download this plan as JSON">Export</button>
           <button data-act="import" title="Load a plan from JSON">Import</button>
           <button data-act="clear" class="danger" title="Remove every building">Clear</button>
           <input type="file" id="file" accept="application/json,.json" hidden />
           <input type="file" id="sav-file" accept=".sav" hidden />
+          <input type="file" id="sav-original" accept=".sav" hidden />
         </div>
         <div id="canvas-wrap">
           <canvas id="map"></canvas>

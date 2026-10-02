@@ -7,13 +7,15 @@ import { Camera } from './render/camera';
 import { GREEN_AT, RED_AT, Renderer, desirabilityColor, layerColor, type Ghost, type View } from './render/canvas';
 import { Palette } from './ui/sidebar';
 import { renderStats } from './ui/stats';
-import { exportPlan, loadAutosave, readPlanFile, saveMap, scheduleAutosave } from './storage';
+import { downloadBlob, exportPlan, loadAutosave, readPlanFile, saveMap, scheduleAutosave } from './storage';
+import { SaveMismatchError, planSaveExport, writeSaveEdits, type SaveEdit } from './export/sav';
 import { Terrain, type MapData } from './model/terrain';
 import { groundFor, previewFlatten, type Ground } from './model/flatten';
 import { markersAt } from './model/markers';
 import { importSaveBuildings } from './model/mapImport';
 import { SaveFormatError, isSupportedVersion, parseSave } from './import/sav';
 import { loadOverlays, renderMapPanel } from './ui/mapPanel';
+import { ask } from './ui/dialog';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector(sel) as T;
 
@@ -357,6 +359,7 @@ function updateToolbar() {
   const btn = (a: string) => document.querySelector<HTMLButtonElement>(`[data-act="${a}"]`)!;
   btn('select').classList.toggle('on', !placing && !flattening);
   btn('flatten').classList.toggle('on', flattening);
+  btn('export-save').disabled = !map;
   btn('flatten').disabled = !map;
   btn('flatten').title = !map
     ? 'Import a save to flatten its terrain'
@@ -793,7 +796,11 @@ saveInput.addEventListener('change', async () => {
   const file = saveInput.files?.[0];
   saveInput.value = '';
   if (!file) return;
-  if (plan.buildings.length && !confirm('Importing a save replaces the current plan. Export it first if you want to keep it. Continue?')) return;
+  if (
+    plan.buildings.length &&
+    !(await ask({ title: 'Replace the current plan?', body: ['Importing a save replaces the current plan. Export it first if you want to keep it.'], ok: 'Import' }))
+  )
+    return;
   toast('Loading map…');
   await new Promise((r) => setTimeout(r, 30)); // let the toast paint before the parse blocks
   try {
@@ -825,8 +832,55 @@ function importSave() {
   saveInput.click();
 }
 
-function removeMap() {
-  if (!confirm('Remove the imported map and start a blank 100×100 plan? Export first if you want to keep this plan.')) return;
+// ---------- writing back to the save ----------
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+let pendingEdits: SaveEdit[] = [];
+
+async function exportSave() {
+  if (!map) return toast('Import a save first');
+  const ex = planSaveExport(plan, map);
+  if (ex.needsReimport) return toast('Import the save again to export to it: this map was stored before buildings were linked to the save');
+  const skipped = Object.entries(ex.notWritten).map(([k, n]) => `${k.toLowerCase()} (${n})`);
+  if (!ex.edits.length)
+    return toast(`No moved or rotated buildings to write back${skipped.length ? ` · not written: ${skipped.join(', ')}` : ''}`);
+  const rotated = ex.edits.filter((e) => e.rotated).length;
+  const moved = ex.edits.length - rotated;
+  const what = [moved && `${plural(moved, 'moved building')}`, rotated && `${plural(rotated, 'rotated building')}`].filter(Boolean).join(' and ');
+  const body = [
+    skipped.length ? `Not written back yet: ${skipped.join(', ')}.` : '',
+    'Trees, rocks, fields and pastures aren’t shown in the planner, so check in-game that moved buildings don’t land on them.',
+    `Next, choose the original save file (${map.name}.sav). It isn’t changed: the edited copy downloads as ${map.name}_planner.sav.`,
+  ].filter(Boolean);
+  if (!(await ask({ title: `Write ${what} into a copy of the save?`, body, ok: 'Choose original save…' }))) return;
+  pendingEdits = ex.edits;
+  savOriginalInput.click();
+}
+
+const savOriginalInput = $<HTMLInputElement>('#sav-original');
+savOriginalInput.addEventListener('change', async () => {
+  const file = savOriginalInput.files?.[0];
+  savOriginalInput.value = '';
+  if (!file || !map || !pendingEdits.length) return;
+  try {
+    const out = writeSaveEdits(await file.arrayBuffer(), map, pendingEdits);
+    downloadBlob(new Blob([out], { type: 'application/octet-stream' }), `${map.name}_planner.sav`);
+    toast(`Wrote ${plural(pendingEdits.length, 'building')} to ${map.name}_planner.sav`);
+  } catch (err) {
+    if (err instanceof SaveMismatchError) return toast(err.message);
+    console.error(err);
+    toast('Couldn’t write that save file');
+  }
+});
+
+async function removeMap() {
+  const ok = await ask({
+    title: 'Remove the imported map?',
+    body: ['This starts a blank 100×100 plan. Export first if you want to keep this plan.'],
+    ok: 'Remove map',
+    danger: true,
+  });
+  if (!ok) return;
   setMapAndPlan(null, new Plan());
 }
 
@@ -855,8 +909,10 @@ const actions: Record<string, () => void> = {
   export: () => exportPlan(plan, map),
   import: () => fileInput.click(),
   'import-save': importSave,
-  clear: () => {
-    if (!plan.buildings.length || !confirm('Remove every building from the plan? You can undo this.')) return;
+  'export-save': exportSave,
+  clear: async () => {
+    if (!plan.buildings.length) return;
+    if (!(await ask({ title: 'Remove every building?', body: ['You can undo this.'], ok: 'Clear plan', danger: true }))) return;
     pushUndo();
     plan.clear();
     selectedId = null;
