@@ -791,7 +791,19 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
       const y0 = Math.round(Math.min(...rows));
       const w = Math.round(Math.max(...cols)) - x0 + 1;
       const h = Math.round(Math.max(...rows)) - y0 + 1;
-      buildings.push({ typeId, x: x0 + w / 2, y: y0 + h / 2, rot: 0, size: { w, h } });
+      const b: SaveBuilding = { typeId, x: x0 + w / 2, y: y0 + h / 2, rot: 0, size: { w, h } };
+      // Fields and pastures start with u32 id, a 4, then the area's center: keep where, for writing moves back.
+      const dv = new DataView(buf);
+      const centerX = worldM - b.x * cellM;
+      const centerZ = b.y * cellM;
+      if (
+        typeId !== 'graveyard' &&
+        dv.getUint8(span.start + 4) === 4 &&
+        Math.abs(dv.getFloat32(span.start + 5, true) - centerX) < 0.01 &&
+        Math.abs(dv.getFloat32(span.start + 13, true) - centerZ) < 0.01
+      )
+        b.area = { start: span.start, end: span.end, pos: span.start + 5 };
+      buildings.push(b);
     }
 
   // --- bridges: the header (with a 4 in the flag byte that buildings use for "has parent") is

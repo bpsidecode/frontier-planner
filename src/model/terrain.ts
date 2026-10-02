@@ -66,6 +66,11 @@ export interface SaveBuilding {
    * the occupied-tile block, for writing moves and rotations back. Roads don't have one.
    */
   rec?: { pos: number; block: number };
+  /**
+   * For crop fields and pastures: the record's byte range and its header position offset, for
+   * writing moves back (the whole record's coordinates are shifted).
+   */
+  area?: { start: number; end: number; pos: number };
   /** Set by the importer when the building couldn't be placed (it overlapped another one). */
   skipped?: boolean;
 }
@@ -188,6 +193,9 @@ export function deserializeMap(raw: unknown): MapData | null {
       if (size && Number.isInteger(size.w) && Number.isInteger(size.h)) out.size = { w: size.w, h: size.h };
       const rec = o.rec as SaveBuilding['rec'];
       if (rec && Number.isInteger(rec.pos) && Number.isInteger(rec.block)) out.rec = { pos: rec.pos, block: rec.block };
+      const area = o.area as SaveBuilding['area'];
+      if (area && Number.isInteger(area.start) && Number.isInteger(area.end) && Number.isInteger(area.pos))
+        out.area = { start: area.start, end: area.end, pos: area.pos };
       if (o.skipped === true) out.skipped = true;
       return out;
     })

@@ -849,12 +849,20 @@ async function exportSave() {
   const skipped = Object.entries(ex.notWritten).map(([k, n]) => `${k.toLowerCase()} (${n})`);
   if (!ex.edits.length)
     return toast(`No moved or rotated buildings to write back${skipped.length ? ` · not written: ${skipped.join(', ')}` : ''}`);
+  const areas = ex.edits.filter((e) => e.kind === 'area').length;
   const rotated = ex.edits.filter((e) => e.rotated).length;
-  const moved = ex.edits.length - rotated;
-  const what = [moved && `${plural(moved, 'moved building')}`, rotated && `${plural(rotated, 'rotated building')}`].filter(Boolean).join(' and ');
+  const moved = ex.edits.length - rotated - areas;
+  const what = [
+    moved && plural(moved, 'moved building'),
+    rotated && plural(rotated, 'rotated building'),
+    areas && plural(areas, 'moved field or pasture', 'moved fields and pastures'),
+  ]
+    .filter(Boolean)
+    .join(', ')
+    .replace(/, ([^,]*)$/, ' and $1');
   const body = [
     skipped.length ? `Not written back yet: ${skipped.join(', ')}.` : '',
-    'Trees, rocks, fields and pastures aren’t shown in the planner, so check in-game that moved buildings don’t land on them.',
+    'Trees and rocks aren’t shown in the planner, so check in-game that moved buildings don’t land on them.',
     `Next, choose the original save file (${map.name}.sav). It isn’t changed: the edited copy downloads as ${map.name}_planner.sav.`,
   ].filter(Boolean);
   if (!(await ask({ title: `Write ${what} into a copy of the save?`, body, ok: 'Choose original save…' }))) return;
@@ -870,7 +878,7 @@ savOriginalInput.addEventListener('change', async () => {
   try {
     const out = writeSaveEdits(await file.arrayBuffer(), map, pendingEdits);
     downloadBlob(new Blob([out], { type: 'application/octet-stream' }), `${map.name}_planner.sav`);
-    toast(`Wrote ${plural(pendingEdits.length, 'building')} to ${map.name}_planner.sav`);
+    toast(`Wrote ${plural(pendingEdits.length, 'change')} to ${map.name}_planner.sav`);
   } catch (err) {
     if (err instanceof SaveMismatchError) return toast(err.message);
     console.error(err);

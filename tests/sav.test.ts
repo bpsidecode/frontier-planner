@@ -403,6 +403,70 @@ describe.skipIf(!realPath)('real save file', () => {
     }
   });
 
+  it('writes crop field and pasture moves back by shifting their records', () => {
+    const plan = importSaveBuildings(map).plan;
+    const zones = plan.buildings.filter((b) => (b.typeId === 'crop-field' || b.typeId === 'pasture') && b.src && map.buildings[b.src.i].area);
+    if (!zones.length) return; // this save has no fields or pastures
+    const moved: typeof zones = [];
+    for (const typeId of ['crop-field', 'pasture'])
+      for (const z of zones.filter((b) => b.typeId === typeId)) {
+        const f = footprint(z);
+        // Diagonally clear of the old spot, so no coordinate that should have moved can still read
+        // as a position in the old area.
+        const d = Math.max(f.w, f.h) + 3;
+        const ok = [[d, d], [-d, d], [d, -d], [-d, -d]].some(([dx, dy]) => plan.update(z.id, { x: z.x + dx, y: z.y + dy }));
+        if (ok) {
+          moved.push(z);
+          break;
+        }
+      }
+    expect(moved.length).toBeGreaterThan(0);
+    const ex = planSaveExport(plan, map);
+    expect(ex.edits.filter((e) => e.kind === 'area')).toHaveLength(moved.length);
+
+    const src = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+    const out = writeSaveEdits(src, map, ex.edits);
+    const back = parseSave(out, 'real.sav');
+    const changed = new Set(ex.edits.map((e) => e.i));
+    back.buildings.forEach((b, i) => {
+      const { skipped: _skipped, ...original } = map.buildings[i];
+      if (!changed.has(i)) expect(b, `building ${i}`).toEqual(original);
+    });
+    const a = new Uint8Array(src);
+    const o = new Uint8Array(out);
+    const dvOut = new DataView(out);
+    const worldM = map.size * 5;
+    for (const z of moved) {
+      const e = ex.edits.find((e) => e.i === z.src!.i)!;
+      expect(back.buildings[e.i]).toMatchObject({ typeId: z.typeId, x: e.rect.x + e.rect.w / 2, y: e.rect.y + e.rect.h / 2, size: { w: e.rect.w, h: e.rect.h } });
+      // Nothing in the record still looks like a position in the old area (loosely: an x in range
+      // followed by a z in range one or two floats later).
+      const b = map.buildings[e.i];
+      const { start, end } = b.area!;
+      const ox = Math.round(b.x - b.size!.w / 2);
+      const oy = Math.round(b.y - b.size!.h / 2);
+      const x0 = worldM - (ox + b.size!.w) * 5, x1 = worldM - ox * 5, z0 = oy * 5, z1 = (oy + b.size!.h) * 5;
+      let left = 0;
+      for (let k = start; k + 12 <= end; k++) {
+        const x = dvOut.getFloat32(k, true);
+        if (x < x0 || x > x1) continue;
+        const za = dvOut.getFloat32(k + 4, true);
+        const zb = dvOut.getFloat32(k + 8, true);
+        if ((za >= z0 && za <= z1) || (zb >= z0 && zb <= z1)) left++;
+      }
+      expect(left, `${z.typeId} positions left in its old area`).toBe(0);
+    }
+    // Outside the moved records, only exact copies of a moved header position change (a herd's
+    // copy of its pasture): each a run of at most 12 bytes that now equals the new header position.
+    const recs = ex.edits.map((e) => map.buildings[e.i].area!);
+    const headers = recs.map((r) => Array.from(o.subarray(r.pos, r.pos + 12)).join(','));
+    for (let k = 0; k < a.length; k++) {
+      if (a[k] === o[k] || recs.some((r) => k >= r.start && k < r.end)) continue;
+      const run = Array.from({ length: 12 }, (_, d) => k - d).some((s) => s >= 0 && headers.includes(Array.from(o.subarray(s, s + 12)).join(',')));
+      expect(run, `byte ${k} changed outside the moved records`).toBe(true);
+    }
+  });
+
   it('imports the town onto land', () => {
     const { plan, imported, overlapping, sizeMismatch } = importSaveBuildings(map);
     console.log('imported', JSON.stringify(imported));
