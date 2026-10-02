@@ -39,6 +39,11 @@ const AREA_LABELS: Record<string, string> = {
   graveyard: 'Graveyards imported before moves could be written (import the save again)',
   bridge: 'Moved bridge tiles',
 };
+const RESHAPED_LABELS: Record<string, string> = {
+  'crop-field': 'Reshaped crop fields (pieces moved apart, resized or deleted)',
+  pasture: 'Reshaped pastures (pieces moved apart, resized or deleted)',
+  graveyard: 'Reshaped graveyards (pieces moved apart, resized or deleted)',
+};
 const RESIZED_LABELS: Record<string, string> = {
   'crop-field': 'Resized crop fields',
   pasture: 'Resized pastures',
@@ -56,6 +61,33 @@ export function planSaveExport(plan: { buildings: Placed[]; flattened: Rect[] },
   }
 
   const seen = new Set<number>();
+  // The pieces of an irregular field share one save record; they're written back as one move if
+  // all of them moved together.
+  const pieces = new Map<number, Placed[]>();
+  for (const b of plan.buildings)
+    if (b.src && map.buildings[b.src.i]?.pieces) pieces.set(b.src.i, [...(pieces.get(b.src.i) ?? []), b]);
+  for (const [i, group] of pieces) {
+    seen.add(i);
+    const from = map.buildings[i];
+    const dx = group[0].x - group[0].src!.x;
+    const dy = group[0].y - group[0].src!.y;
+    const whole =
+      group.length === from.pieces!.length &&
+      group.every((b) => {
+        const s = b.src!;
+        return b.typeId === s.typeId && b.rot === s.rot && b.w === s.w && b.h === s.h && b.x - s.x === dx && b.y - s.y === dy;
+      });
+    if (!whole) bump(RESHAPED_LABELS[from.typeId] ?? 'Reshaped areas');
+    else if (!dx && !dy) continue;
+    else if (!from.area) bump(AREA_LABELS[from.typeId] ?? 'Moved buildings with no record position');
+    else {
+      const w = from.size!.w;
+      const h = from.size!.h;
+      const rect = { x: Math.round(from.x - w / 2) + dx, y: Math.round(from.y - h / 2) + dy, w, h };
+      out.edits.push({ kind: 'area', i, typeId: from.typeId, rect, rot: 0, rotated: false });
+    }
+  }
+
   for (const b of plan.buildings) {
     const road = b.typeId === 'road';
     if (!b.src) {
@@ -64,6 +96,7 @@ export function planSaveExport(plan: { buildings: Placed[]; flattened: Rect[] },
     }
     const s = b.src;
     const from = map.buildings[s.i];
+    if (pieces.has(s.i)) continue;
     if (!from || seen.has(s.i)) {
       bump('Buildings with no matching save record');
       continue;
@@ -105,7 +138,7 @@ export function writeSaveEdits(buf: ArrayBuffer, map: MapData, edits: SaveEdit[]
     const b = map.buildings[e.i];
     if (e.kind === 'area') {
       const a = b?.area;
-      const fits = a && a.end <= out.byteLength && near(f32(a.pos), worldM - b.x * TILE_M) && near(f32(a.pos + 8), b.y * TILE_M);
+      const fits = a && a.end <= out.byteLength && near(f32(a.pos), a.x) && near(f32(a.pos + 8), a.z);
       if (!fits) throw new SaveMismatchError(`This file doesn't match the imported map (${getType(e.typeId).name} isn't where the import found it).`);
       continue;
     }

@@ -197,10 +197,12 @@ export class Plan {
     const dx = next.x - b.x;
     const dy = next.y - b.y;
     const sameShape = next.w === b.w && next.h === b.h && next.rot === b.rot;
-    const carried =
-      zone && sameShape && (dx || dy)
-        ? dependents.filter((d) => BUILDING_BY_ID[d.typeId].within === b.typeId && contains(old, footprint(d)))
-        : [];
+    const moving = zone && sameShape && (dx || dy);
+    // The other pieces of an irregular field imported from one save record move with it, too.
+    const siblings = moving && b.src ? this.buildings.filter((d) => d !== b && d.src?.i === b.src!.i && isZone(d.typeId)) : [];
+    const carried = moving
+      ? [...dependents.filter((d) => BUILDING_BY_ID[d.typeId].within === b.typeId && contains(old, footprint(d))), ...siblings]
+      : [];
     const carriedFrom = carried.map((d) => ({ d, x: d.x, y: d.y }));
     Object.assign(b, changes);
     // Zones can overlap, so clearing one's old tiles could clear a neighbor's: restamp them all.
@@ -217,9 +219,8 @@ export class Plan {
       for (const d of carried) {
         const r = { ...footprint(d), x: d.x + dx, y: d.y + dy };
         if (!this.canPlace(r, d.id, false, d.typeId)) return undo();
-        this.stamp(footprint(d), 0);
         Object.assign(d, { x: r.x, y: r.y });
-        this.stamp(r, d.id);
+        this.rebuild();
       }
       // Don't move or shrink a graveyard out from under its crypt.
       if (!dependents.every((d) => this.ruleHolds(d))) return undo();
@@ -330,8 +331,9 @@ export class Plan {
         };
       const v = getType(typeId).variable;
       if (v && b.w != null && b.h != null) {
-        p.w = clamp(int(b.w), v.min, v.max);
-        p.h = clamp(int(b.h), v.min, v.max);
+        // Never shrink an imported field below the size the game gave it.
+        p.w = clamp(int(b.w), v.min, Math.max(v.max, p.src?.w ?? 0));
+        p.h = clamp(int(b.h), v.min, Math.max(v.max, p.src?.h ?? 0));
       }
       plan.add(p, { ignoreTerrain: true });
     }

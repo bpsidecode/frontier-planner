@@ -16,7 +16,7 @@ Things to confirm in the game and correct where needed:
 - [ ] **Check the remaining guessed building sizes.** These have no confirmed footprint, so their sizes are guesses. They're marked `sizeUnverified` in [`src/data/buildings.ts`](src/data/buildings.ts) and shown with `*` in the app.
   - [ ] Hedge Garden (3×3), Topiary Garden (3×3)
   - [ ] Trellis (1×2)
-  - [x] Vault 3×4 (the save calls it `Treasury`), Civic and Military Monuments 5×5
+  - [x] Vault 3×4 (the save calls it `Treasury`), Civic, Military and Economic Monuments 5×5
   - [x] Rose Bush, Low Brush, Tall Brush (1×1), confirmed by the decoration test row
   - [x] Lookout, Watch and Battlement Towers are all 1×1, and they don't sit on wall tiles.
   - [x] **Read real footprints from saves.** Every building and decoration record stores the tiles it occupies, plus its size with rotation already applied (see the write-back item below). The parser reads it into each imported building's `size`. The real-save test checks every catalog entry against it, and found 16 entries whose width and height were swapped compared with the game's unrotated orientation. Those are now fixed: Academy, Apothecary, Brickyard, Candle Shop, Charcoal Kiln, Chicken Coop (which imported sideways), Cobbler, Large Statue, Potter, Pub, School, Storehouse, Trading Post and Weaver, plus the Warehouse and Trading Center, which share their base building's orientation but haven't appeared in a save yet.
@@ -39,9 +39,16 @@ Things to confirm in the game and correct where needed:
 - [ ] **Import all buildings from a save.** Most are done: building classes and prefab ids map to planner buildings with their position and rotation (`BUILDING_CLASSES` and `PREFAB_TYPES` in [`src/import/sav.ts`](src/import/sav.ts)). On the original Lametree save that's 1,182 buildings, with 2 skipped because they touch a neighbor. Still to do:
   - [x] **Upgrade tiers and variants.** Each building's `…Guids` record stores its prefab id, which identifies the exact variant. Two side-by-side test saves labeled every building upgrade pair, the Temple and Theater upgrades, all fences and fence gates, and nearly every decoration.
   - [ ] **Academy → Grand Academy.** The Academy's prefab didn't change between the two test saves, so the Grand Academy's id is still unknown.
-  - [ ] **Two unidentified decorations:** a 1×1 decoration placed between the corner bench plazas and the medium plazas in the test row (prefab `fe6ea4b5…`), and a 2×2 decoration in the original town (prefab `1935626f…`).
+  - [ ] **Unidentified decorations** (imported as nothing yet, counted under "Other decorations"). These are probably the Extravagant versions of other decorations; once each is matched to its base, map its prefab id to the base entry, since Extravagant decorations share their base's catalog entry:
+    - `fe6ea4b5…` (1×1), between the corner bench plazas and the medium plazas in the test row
+    - `1935626f…` (2×2), in the original town at tile (163, 217)
+    - `68184683…` (3×2, two of them, one turned) and `62548091…` (3×1), near tile (175, 230) in the EconMon save
+    - `36dee76a…`, `10f62a80…`, `b6dcf861…` and `992cd89f…` (1×1 each), a 2×2 block at tiles (224–225, 222) and (224–225, 225) in the EconMon save
+  - [x] **Deep mines.** Deep coal and gold mines share the regular mine's class and are told apart by prefab id; deep clay and sand mines have their own classes (`ClayPit`, `SandPit`). A mine whose record has a 3×3 footprint imports as the deep variant even without a known prefab id, which covers the Deep Iron Mine (not built in any save yet).
+  - [ ] **Deep Iron Mine prefab id.** None of the saves has one built yet.
+  - [x] **Economic Monument** (5×5, `economicMonument` record, class `Monument`).
   - [ ] **Which bush is which.** The four bushes were placed as a 2×2 block and are labeled in reading order. All four have the same size and desirability, so a mix-up doesn't change results.
-  - [x] **Crop fields, pastures and graveyards.** Their records hold a grid block and a list of tile centers; every one in the test saves is a full rectangle, so they import as resizable planner objects. They're zones: other buildings can stand on them, as the game's pasture fences, barns and apiaries and the graveyard's crypt do, and they can overlap each other, as two pastures in the AllPair save do.
+  - [x] **Crop fields, pastures and graveyards.** Their records hold a grid block and a list of tile centers; most are full rectangles and import as resizable planner objects. An irregular one (an L-shaped 17×8 field in the deep mines save, whose grid fills unused cells with (0, 0)) imports as rectangular pieces that move together and export as one move. They're zones: other buildings can stand on them, as the game's pasture fences, barns and apiaries and the graveyard's crypt do, and they can overlap each other, as two pastures in the AllPair save do.
   - [x] **Pasture and graveyard desirability.** Confirmed: neither affects desirability.
   - [x] **Crypts must be placed inside a graveyard.** The planner refuses a Crypt outside one, won't let a graveyard shrink away from its crypt, and moves the crypt along when the graveyard moves.
   - [x] **Roads.** Road splines (`splineRoadContainer`) are rasterized onto the game's 5 m grid and imported as editable 1×1 Road objects.
@@ -50,7 +57,7 @@ Things to confirm in the game and correct where needed:
   - [x] **Wide gates.** Gates centered as if two tiles wide import as the 2×1 Wide Gate (6 in the Lametree save).
   - [x] **Raider guard towers.** Their records use the standard building header with the player tower's class, and they're shown in the Enemies overlay (8 in the alpine save, 15 in the large lowland save).
   - [x] **Fruit trees.** `FruitTreeResource` records are shown in the Forageables overlay (277 in the Lametree saves, mostly in orchards).
-- [ ] **Add desirability values for v1.1 buildings.** Still unknown for the Academy. The Pharmacy hasn't appeared in any save yet. Add values in [`src/data/buildings.ts`](src/data/buildings.ts).
+- [ ] **Add desirability values for v1.1 buildings.** Still unknown for the Academy and the Economic Monument. The Pharmacy hasn't appeared in any save yet. Add values in [`src/data/buildings.ts`](src/data/buildings.ts).
   - [x] Confirmed to have no desirability effect: Book Binder, Crypt, Vault, Storage Depots, Guild Hall, Forager Garden, the monuments, the bench plazas, and Crates and Barrels.
 - [x] **Support terrain flattening.** The Flatten tool (F) levels a dragged rectangle to its average height, as the game does, and re-checks the slopes in and around it. Flattened areas are saved with the plan and can be undone or removed. Maps imported before this change need importing again, because heights weren't kept.
   - [ ] **Check flattening against the game:** whether it can include water or tiles under buildings (the planner refuses water and allows buildings), and whether the game limits the area's size.

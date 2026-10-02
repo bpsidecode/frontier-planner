@@ -477,6 +477,32 @@ describe.skipIf(!realPath)('real save file', () => {
     }
   });
 
+  it('imports an irregular field as pieces that move and export together', () => {
+    const i = map.buildings.findIndex((b) => b.pieces);
+    if (i < 0) return; // only some saves have one
+    const field = map.buildings[i];
+    const tiles = field.pieces!.reduce((n, p) => n + p.w * p.h, 0);
+    expect(field.pieces!.length).toBeGreaterThan(1);
+    expect(tiles).toBeLessThan(field.size!.w * field.size!.h);
+    const plan = importSaveBuildings(map).plan;
+    plan.setBlocked(null);
+    const parts = plan.buildings.filter((b) => b.src?.i === i);
+    expect(parts).toHaveLength(field.pieces!.length);
+    // Dragging one piece moves the others with it, and the export writes one move.
+    const d = field.size!.w + 3;
+    expect([[d, d], [-d, d], [d, -d], [-d, -d]].some(([dx, dy]) => plan.update(parts[0].id, { x: parts[0].x + dx, y: parts[0].y + dy }))).toBe(true);
+    const dx = parts[0].x - parts[0].src!.x;
+    const dy = parts[0].y - parts[0].src!.y;
+    for (const p of parts) expect([p.x - p.src!.x, p.y - p.src!.y]).toEqual([dx, dy]);
+    const ex = planSaveExport(plan, map);
+    expect(ex.edits.filter((e) => e.i === i)).toMatchObject([{ kind: 'area' }]);
+    const back = parseSave(writeSaveEdits(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer, map, ex.edits), 'real.sav');
+    expect(back.buildings[i].pieces).toEqual(field.pieces!.map((p) => ({ ...p, x: p.x + dx, y: p.y + dy })));
+    // A piece pulled away on its own reshapes the field, which isn't written back.
+    parts[1].x += 1;
+    expect(planSaveExport(plan, map).notWritten).toMatchObject({ 'Reshaped crop fields (pieces moved apart, resized or deleted)': 1 });
+  });
+
   it('imports the town onto land', () => {
     const { plan, imported, overlapping, sizeMismatch } = importSaveBuildings(map);
     console.log('imported', JSON.stringify(imported));

@@ -111,6 +111,8 @@ export const BUILDING_CLASSES: Record<string, string> = {
   Cheesemaker: 'cheesemaker',
   ChickenCoop: 'chicken-coop',
   ClayPitBuilding: 'clay-pit',
+  ClayPit: 'deep-clay-mine',
+  SandPit: 'deep-sand-mine',
   CoalMine: 'coal-mine',
   CobblerShop: 'cobbler-shop',
   CompostYard: 'compost-yard',
@@ -240,6 +242,13 @@ export const PREFAB_TYPES: Record<string, string> = {
   '17fe1f61-936b-4700-a207-de9b2db38fa7': 'grand-theater',
   '4aa6d551-fca5-4454-94e9-9bb91bf81e2e': 'civic-monument',
   '0bffb5aa-f886-409a-9ad4-c4491a1a5b1a': 'military-monument',
+  'b95af9c7-e1a0-4e99-b1de-744a41e03bdd': 'economic-monument',
+  // Deep mines (Lametree_deepmines save). Deep mines share the regular mine's class; deep clay and
+  // sand mines have their own (ClayPit, SandPit). No deep iron mine was built yet: see DEEP_MINES.
+  '2ec91b53-96b9-4138-86e7-2e7c0f623343': 'deep-coal-mine',
+  '66a27183-2561-468e-83b0-1c8ee4dbc420': 'deep-gold-mine',
+  '8f7814e6-88df-4cfa-87e8-1a45c3f332cb': 'deep-clay-mine',
+  '96d5a8f7-15e1-4d59-86f2-7878f9367371': 'deep-sand-mine',
 
   // Walls, fences and gates share the classes "Wall" and "Gate".
   'fc599b8e-8bee-45f8-a48e-c924278f6fc2': 'palisade-wall',
@@ -285,6 +294,50 @@ export const PREFAB_TYPES: Record<string, string> = {
 const isNonBuildingClass = (cls: string) => cls.endsWith('Resource') || cls === 'SupplyWagon';
 
 /** Save records (by name prefix) that are player-built but not imported yet. */
+/**
+ * Split a set of tiles into rectangles: runs of columns per row, merged down while consecutive rows
+ * have the same runs. An L-shaped field becomes two rectangles.
+ */
+export function rectsFromCells(cells: { c: number; r: number }[]): { x: number; y: number; w: number; h: number }[] {
+  const byRow = new Map<number, number[]>();
+  for (const { c, r } of cells) byRow.set(r, [...(byRow.get(r) ?? []), c]);
+  const runsOf = (cols: number[]) => {
+    const sorted = [...new Set(cols)].sort((a, b) => a - b);
+    const runs: [number, number][] = [];
+    for (const c of sorted) {
+      const last = runs[runs.length - 1];
+      if (last && c === last[1] + 1) last[1] = c;
+      else runs.push([c, c]);
+    }
+    return runs;
+  };
+  const out: { x: number; y: number; w: number; h: number }[] = [];
+  let open: { x: number; y: number; w: number; h: number }[] = [];
+  for (const r of [...byRow.keys()].sort((a, b) => a - b)) {
+    const next: typeof open = [];
+    for (const [a, b] of runsOf(byRow.get(r)!)) {
+      const cont = open.find((o) => o.x === a && o.w === b - a + 1 && o.y + o.h === r);
+      if (cont) {
+        cont.h++;
+        next.push(cont);
+      } else {
+        const rect = { x: a, y: r, w: b - a + 1, h: 1 };
+        out.push(rect);
+        next.push(rect);
+      }
+    }
+    open = next;
+  }
+  return out;
+}
+
+/** Regular mines → their deep variant, recognised by the 3×3 footprint stored in the record. */
+const DEEP_MINES: Record<string, string> = {
+  'coal-mine': 'deep-coal-mine',
+  'gold-mine': 'deep-gold-mine',
+  'iron-mine': 'deep-iron-mine',
+};
+
 const NOT_IMPORTED: Record<string, string> = {
   buildingBuildSite: 'Construction sites',
   gateBuildSite: 'Construction sites',
@@ -409,8 +462,9 @@ function findSpawnTable(buf: ArrayBuffer, start: number, end: number, maxKey: nu
 
 /**
  * Tile centers (world x, z) of a crop field, pasture or graveyard record: a grid block of cell size,
- * columns, rows and the half-size offsets (−cols·cell/2, 0.5, −rows·cell/2), five more bytes, a u32
- * count, then that many (x, z) pairs. Every one seen so far is a full rectangle.
+ * columns, rows and offsets (usually −cols·cell/2, 0.5, −rows·cell/2), five more bytes, a u32
+ * count, then that many (x, z) pairs. Most are full rectangles; an L-shaped field fills the
+ * grid's unused cells with (0, 0), which are dropped here.
  */
 export function readAreaTiles(
   buf: ArrayBuffer,
@@ -426,11 +480,17 @@ export function readAreaTiles(
     const cols = u(p + 4);
     const rows = u(p + 8);
     if (!(cols > 0 && cols < 400 && rows > 0 && rows < 400)) continue;
-    if (Math.abs(f(p + 12) + (cols * cellM) / 2) > 1e-3 || f(p + 16) !== 0.5 || Math.abs(f(p + 20) + (rows * cellM) / 2) > 1e-3) continue;
+    // The offsets are usually −cols·cell/2 and −rows·cell/2, but a field enlarged after it was laid
+    // out keeps its old ones (a 17×8 field with the 12-column offset), so only their form is checked.
+    const ox = f(p + 12);
+    const oz = f(p + 20);
+    if (!(ox < 0 && oz < 0 && Number.isInteger(ox / 2.5) && Number.isInteger(oz / 2.5)) || f(p + 16) !== 0.5) continue;
     const count = u(p + 29);
     const first = p + 33;
     if (count < 1 || count > cols * rows || first + count * 8 > end) return null;
-    return { tiles: Array.from({ length: count }, (_, k) => ({ x: f(first + k * 8), z: f(first + k * 8 + 4) })), grid: p };
+    // An irregular (e.g. L-shaped) area fills its grid's unused cells with (0, 0).
+    const tiles = Array.from({ length: count }, (_, k) => ({ x: f(first + k * 8), z: f(first + k * 8 + 4) }));
+    return { tiles: tiles.filter((t) => t.x !== 0 || t.z !== 0), grid: p };
   }
   return null;
 }
@@ -790,24 +850,28 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
         notImported[`Unreadable ${typeId.replace('-', ' ')}s`] = (notImported[`Unreadable ${typeId.replace('-', ' ')}s`] ?? 0) + 1;
         continue;
       }
-      const cols = found.tiles.map((t) => (worldM - t.x) / cellM - 0.5);
-      const rows = found.tiles.map((t) => t.z / cellM - 0.5);
-      const x0 = Math.round(Math.min(...cols));
-      const y0 = Math.round(Math.min(...rows));
-      const w = Math.round(Math.max(...cols)) - x0 + 1;
-      const h = Math.round(Math.max(...rows)) - y0 + 1;
+      if (!found.tiles.length) continue;
+      const cells = found.tiles.map((t) => ({ c: Math.round((worldM - t.x) / cellM - 0.5), r: Math.round(t.z / cellM - 0.5) }));
+      const x0 = Math.min(...cells.map((t) => t.c));
+      const y0 = Math.min(...cells.map((t) => t.r));
+      const w = Math.max(...cells.map((t) => t.c)) - x0 + 1;
+      const h = Math.max(...cells.map((t) => t.r)) - y0 + 1;
       const b: SaveBuilding = { typeId, x: x0 + w / 2, y: y0 + h / 2, rot: 0, size: { w, h } };
+      if (cells.length !== w * h) b.pieces = rectsFromCells(cells);
       // Keep where the record and its center (x, y, z) are, for writing moves back. Fields and
-      // pastures start with u32 id, a 4, then the center; a graveyard has its corner first. The
-      // center always comes before the grid block (the tile list after it holds similar numbers).
+      // pastures start with u32 id, a 4, then the center (of the area as first laid out, so not
+      // always the tiles' center); a graveyard has its corner first and its center before the grid
+      // block (the tile list after it holds similar numbers).
       const dv = new DataView(buf);
-      const centerX = worldM - b.x * cellM;
-      const centerZ = b.y * cellM;
-      for (let o = span.start; o + 12 <= found.grid; o++)
-        if (Math.abs(dv.getFloat32(o, true) - centerX) < 0.01 && Math.abs(dv.getFloat32(o + 8, true) - centerZ) < 0.01) {
-          b.area = { start: span.start, end: span.end, pos: o };
-          break;
-        }
+      let pos = -1;
+      if (dv.getUint8(span.start + 4) === 4) pos = span.start + 5;
+      else {
+        const centerX = worldM - b.x * cellM;
+        const centerZ = b.y * cellM;
+        for (let o = span.start; o + 12 <= found.grid && pos < 0; o++)
+          if (Math.abs(dv.getFloat32(o, true) - centerX) < 0.01 && Math.abs(dv.getFloat32(o + 8, true) - centerZ) < 0.01) pos = o;
+      }
+      if (pos >= 0) b.area = { start: span.start, end: span.end, pos, x: dv.getFloat32(pos, true), z: dv.getFloat32(pos + 8, true) };
       buildings.push(b);
     }
 
@@ -867,7 +931,7 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
           continue;
         }
         const prefab = prefabs.get(span.name)?.[span.index];
-        const typeId = (prefab && PREFAB_TYPES[prefab]) || BUILDING_CLASSES[cls];
+        let typeId = (prefab && PREFAB_TYPES[prefab]) || BUILDING_CLASSES[cls];
         if (!typeId) {
           if (cls === 'Decorations') notImported['Other decorations'] = (notImported['Other decorations'] ?? 0) + 1;
           else if (!isNonBuildingClass(cls)) unknownBuildingClasses[cls] = (unknownBuildingClasses[cls] ?? 0) + 1;
@@ -875,6 +939,8 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
         }
         const yaw = 2 * Math.atan2(qy, qw);
         const block = findFootprintBlock(buf, r.pos, span.end, p.x, p.z, cellM);
+        // A mine with a deep mine's 3×3 footprint is the deep variant, even without a known prefab id.
+        if (block && DEEP_MINES[typeId] && block.w === 3 && block.h === 3) typeId = DEEP_MINES[typeId];
         buildings.push({
           typeId,
           ...toTile(p),

@@ -70,7 +70,9 @@ export interface SaveBuilding {
    * For crop fields and pastures: the record's byte range and its header position offset, for
    * writing moves back (the whole record's coordinates are shifted).
    */
-  area?: { start: number; end: number; pos: number };
+  area?: { start: number; end: number; pos: number; x: number; z: number };
+  /** For irregular (e.g. L-shaped) fields: the rectangles, in tile coordinates, that make up the area. */
+  pieces?: { x: number; y: number; w: number; h: number }[];
   /** Set by the importer when the building couldn't be placed (it overlapped another one). */
   skipped?: boolean;
 }
@@ -194,8 +196,11 @@ export function deserializeMap(raw: unknown): MapData | null {
       const rec = o.rec as SaveBuilding['rec'];
       if (rec && Number.isInteger(rec.pos) && Number.isInteger(rec.block)) out.rec = { pos: rec.pos, block: rec.block };
       const area = o.area as SaveBuilding['area'];
-      if (area && Number.isInteger(area.start) && Number.isInteger(area.end) && Number.isInteger(area.pos))
-        out.area = { start: area.start, end: area.end, pos: area.pos };
+      if (area && Number.isInteger(area.start) && Number.isInteger(area.end) && Number.isInteger(area.pos) && Number.isFinite(area.x) && Number.isFinite(area.z))
+        out.area = { start: area.start, end: area.end, pos: area.pos, x: area.x, z: area.z };
+      const pieces = o.pieces as SaveBuilding['pieces'];
+      if (Array.isArray(pieces) && pieces.every((p) => [p.x, p.y, p.w, p.h].every(Number.isInteger)))
+        out.pieces = pieces.map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h }));
       if (o.skipped === true) out.skipped = true;
       return out;
     })

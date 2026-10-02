@@ -106,13 +106,15 @@ add('Amenities', 'Festival Pole', 4, 4, [0.04, 180, 'FestivalPole']);
 add('Amenities', 'Paved Festival Pole', 4, 4, [0.08, 180, 'FestivalPole']);
 add('Amenities', 'Apothecary Shop', 3, 2);
 // Added in game v1.1 and not on the wiki; sizes confirmed in-game. The Book Binder, Crypt, Guild Hall and
-// monuments have no desirability effect (confirmed); the Academy's is still unknown.
+// Civic and Military Monuments have no desirability effect (confirmed); the Academy's and the
+// Economic Monument's are still unknown.
 add('Amenities', 'Academy', 5, 4);
 add('Amenities', 'Book Binder', 2, 3);
 add('Amenities', 'Crypt', 3, 3, null, { within: 'graveyard' });
 add('Amenities', 'Guild Hall', 5, 4);
 add('Amenities', 'Civic Monument', 5, 5);
 add('Amenities', 'Military Monument', 5, 5);
+add('Amenities', 'Economic Monument', 5, 5);
 add('Amenities', 'Rat Catcher', 2, 2);
 add('Amenities', 'Trading Post', 5, 4);
 add('Amenities', 'Trading Center', 5, 4);
@@ -176,7 +178,8 @@ add('Food', 'Forager Garden', 3, 2);
 add('Food', 'Hunter Cabin', 3, 2);
 add('Food', 'Hunter Lodge', 3, 2);
 add('Food', 'Preservist Building', 3, 3);
-add('Food', 'Crop Field', 5, 5, null, { variable: { min: 5, max: 12 }, zone: true });
+// Fields in saves are up to 17 tiles across (Lametree_deepmines); the game's limit is unknown.
+add('Food', 'Crop Field', 5, 5, null, { variable: { min: 5, max: 20 }, zone: true });
 // Pastures in saves are 7×7, 10×10 or 15×15. Desirability unknown.
 add('Food', 'Pasture', 7, 7, null, { variable: { min: 5, max: 15 }, zone: true });
 

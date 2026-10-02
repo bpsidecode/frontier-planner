@@ -39,6 +39,18 @@ export function importSaveBuildings(map: MapData): ImportReport {
     .sort((a, b) => area(b.b.typeId) - area(a.b.typeId));
 
   for (const { b, i } of ordered) {
+    // An irregular field is placed as its rectangular pieces, which share the save record (src.i).
+    if (b.pieces) {
+      let all = true;
+      for (const p of b.pieces) {
+        const sized = { x: p.x, y: p.y, rot: 0, w: p.w, h: p.h };
+        all = !!plan.add({ typeId: b.typeId, ...sized, src: { i, typeId: b.typeId, ...sized } }, { ignoreTerrain: true }) && all;
+      }
+      if (all) delete b.skipped;
+      else b.skipped = true;
+      bump(all ? report.imported : report.overlapping, b.typeId);
+      continue;
+    }
     // Fields, pastures and graveyards are sized by the player; the save gives their size.
     const dims = (typeId: string) => {
       const t = getType(typeId);
