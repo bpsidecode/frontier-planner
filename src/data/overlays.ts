@@ -38,6 +38,7 @@ export const OVERLAY_GROUPS: OverlayGroup[] = [
       { key: 'forage:nuts', label: 'Nuts', color: '#8b5a2b' },
       { key: 'forage:mushrooms', label: 'Mushrooms', color: '#c47f5b' },
       { key: 'forage:eggs', label: 'Eggs', color: '#f0dca0' },
+      { key: 'forage:fruitTrees', label: 'Fruit trees', color: '#f97316' },
     ],
   },
   {
@@ -58,6 +59,7 @@ export const OVERLAY_GROUPS: OverlayGroup[] = [
       { key: 'enemy:raiderCamp', label: 'Raider camps', color: '#b91c1c' },
       { key: 'enemy:raider', label: 'Raiders', color: '#dc2626' },
       { key: 'enemy:batteringRam', label: 'Battering rams', color: '#991b1b' },
+      { key: 'enemy:raiderTower', label: 'Raider guard towers', color: '#450a0a' },
     ],
   },
   {

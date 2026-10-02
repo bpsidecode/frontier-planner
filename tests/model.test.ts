@@ -187,3 +187,42 @@ describe('renamed catalog ids', () => {
     expect(plan.buildings.map((b) => b.typeId)).toEqual(['vault']);
   });
 });
+
+describe('zones', () => {
+  it('lets buildings stand on fields, pastures and graveyards, and zones overlap', () => {
+    const plan = new Plan(20);
+    const pasture = plan.add({ typeId: 'pasture', x: 0, y: 0, rot: 0, w: 7, h: 7 })!;
+    expect(pasture).not.toBeNull();
+    const fence = plan.add({ typeId: 'fence', x: 0, y: 0, rot: 0 })!;
+    expect(fence).not.toBeNull();
+    expect(plan.add({ typeId: 'pasture', x: 4, y: 4, rot: 0, w: 7, h: 7 })).not.toBeNull();
+    // A building still can't overlap a building; clicks hit the building before the zone under it.
+    expect(plan.add({ typeId: 'fence', x: 0, y: 0, rot: 0 })).toBeNull();
+    expect(plan.at(0, 0)?.id).toBe(fence.id);
+    expect(plan.at(1, 1)?.id).toBe(pasture.id);
+    // Moving a zone keeps the overlapping one's tiles.
+    expect(plan.update(pasture.id, { x: 1 })).toBe(true);
+    expect(plan.at(10, 10)?.typeId).toBe('pasture');
+    expect(plan.at(0, 3)).toBeUndefined();
+  });
+});
+
+describe('placement rules', () => {
+  it('only allows a crypt inside a graveyard, and keeps the graveyard around it', () => {
+    const plan = new Plan(20);
+    expect(plan.add({ typeId: 'crypt', x: 1, y: 1, rot: 0 })).toBeNull();
+    const yard = plan.add({ typeId: 'graveyard', x: 0, y: 0, rot: 0, w: 5, h: 6 })!;
+    const crypt = plan.add({ typeId: 'crypt', x: 1, y: 1, rot: 0 })!;
+    expect(crypt).not.toBeNull();
+    // The crypt can move within the graveyard but not out of it.
+    expect(plan.update(crypt.id, { x: 2, y: 3 })).toBe(true);
+    expect(plan.update(crypt.id, { x: 3 })).toBe(false);
+    // The graveyard can't move or shrink away from its crypt, but can grow.
+    expect(plan.update(yard.id, { x: 5 })).toBe(false);
+    expect(plan.update(yard.id, { w: 4 })).toBe(false);
+    expect(plan.get(yard.id)).toMatchObject({ x: 0, w: 5, h: 6 });
+    expect(plan.update(yard.id, { w: 8 })).toBe(true);
+    // Saved and imported crypts are trusted.
+    expect(plan.add({ typeId: 'crypt', x: 12, y: 12, rot: 0 }, { ignoreTerrain: true })).not.toBeNull();
+  });
+});

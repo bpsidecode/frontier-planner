@@ -36,6 +36,7 @@ export const TYPE = {
   SalvagingSite: 117926143,
   Guids: 4058971987,
   SplineRoadContainer: 3467803903,
+  BridgeContainer: 1918126847,
 } as const;
 
 const ITEM_FILLER = 417;
@@ -285,10 +286,6 @@ const isNonBuildingClass = (cls: string) => cls.endsWith('Resource') || cls === 
 
 /** Save records (by name prefix) that are player-built but not imported yet. */
 const NOT_IMPORTED: Record<string, string> = {
-  cropField: 'Crop fields',
-  grazingArea: 'Pastures',
-  graveyard: 'Graveyards',
-  bridgeContainer: 'Bridges',
   buildingBuildSite: 'Construction sites',
   gateBuildSite: 'Construction sites',
 };
@@ -408,6 +405,29 @@ function findSpawnTable(buf: ArrayBuffer, start: number, end: number, maxKey: nu
     }
   }
   return best;
+}
+
+/**
+ * Tile centers (world x, z) of a crop field, pasture or graveyard record: a grid block of cell size,
+ * columns, rows and the half-size offsets (−cols·cell/2, 0.5, −rows·cell/2), five more bytes, a u32
+ * count, then that many (x, z) pairs. Every one seen so far is a full rectangle.
+ */
+export function readAreaTiles(buf: ArrayBuffer, start: number, end: number, cellM = 5): { x: number; z: number }[] | null {
+  const dv = new DataView(buf);
+  const f = (o: number) => dv.getFloat32(o, true);
+  const u = (o: number) => dv.getUint32(o, true);
+  for (let p = start; p + 33 <= Math.min(end, start + 512); p++) {
+    if (f(p) !== cellM) continue;
+    const cols = u(p + 4);
+    const rows = u(p + 8);
+    if (!(cols > 0 && cols < 400 && rows > 0 && rows < 400)) continue;
+    if (Math.abs(f(p + 12) + (cols * cellM) / 2) > 1e-3 || f(p + 16) !== 0.5 || Math.abs(f(p + 20) + (rows * cellM) / 2) > 1e-3) continue;
+    const count = u(p + 29);
+    const first = p + 33;
+    if (count < 1 || count > cols * rows || first + count * 8 > end) return null;
+    return Array.from({ length: count }, (_, k) => ({ x: f(first + k * 8), z: f(first + k * 8 + 4) }));
+  }
+  return null;
 }
 
 /** The occupied-tile block inside a building record (see `findFootprintBlock`). */
@@ -664,6 +684,23 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
   // one spline rather than one object per tile. Sample densely enough to visit every crossed cell,
   // then deduplicate cells shared by adjoining splines and intersections.
   const roads: SaveBuilding[] = [];
+  const bridges: SaveBuilding[] = [];
+  const bridgeCells = new Set<number>();
+  /** 1×1 bridge tiles for every grid cell a straight span crosses. */
+  const rasterizeSegment = (a: { x: number; z: number }, b: { x: number; z: number }) => {
+    const out: SaveBuilding[] = [];
+    const steps = Math.max(1, Math.ceil((Math.hypot(b.x - a.x, b.z - a.z) / cellM) * 4));
+    for (let k = 0; k <= steps; k++) {
+      const t = k / steps;
+      const p = toTile({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
+      const x = Math.floor(p.x);
+      const y = Math.floor(p.y);
+      if (x < 0 || y < 0 || x >= N || y >= N || bridgeCells.has(y * N + x)) continue;
+      bridgeCells.add(y * N + x);
+      out.push({ typeId: 'bridge', x: x + 0.5, y: y + 0.5, rot: 0 });
+    }
+    return out;
+  };
   const roadCells = new Set<number>();
   const cubic = (a: number, b: number, c: number, d: number, t: number) => {
     const u = 1 - t;
@@ -734,15 +771,57 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
     TYPE.Guids,
     TYPE.SplineRoadContainer,
   ]);
+  // --- areas laid out on the tile grid: crop fields, pastures and graveyards. Each holds a grid
+  // block (cell size 5, columns, rows, the half-size offsets) and then the list of its tile centers.
+  const AREA_TYPES: Record<string, string> = { cropField: 'crop-field', grazingArea: 'pasture', graveyard: 'graveyard' };
+  const areaRecords = new Set<Span>();
+  for (const list of spans.values())
+    for (const span of list) {
+      const typeId = AREA_TYPES[span.name];
+      if (!typeId) continue;
+      areaRecords.add(span);
+      const area = readAreaTiles(buf, span.start, span.end, cellM);
+      if (!area) {
+        notImported[`Unreadable ${typeId.replace('-', ' ')}s`] = (notImported[`Unreadable ${typeId.replace('-', ' ')}s`] ?? 0) + 1;
+        continue;
+      }
+      const cols = area.map((t) => (worldM - t.x) / cellM - 0.5);
+      const rows = area.map((t) => t.z / cellM - 0.5);
+      const x0 = Math.round(Math.min(...cols));
+      const y0 = Math.round(Math.min(...rows));
+      const w = Math.round(Math.max(...cols)) - x0 + 1;
+      const h = Math.round(Math.max(...rows)) - y0 + 1;
+      buildings.push({ typeId, x: x0 + w / 2, y: y0 + h / 2, rot: 0, size: { w, h } });
+    }
+
+  // --- bridges: the header (with a 4 in the flag byte that buildings use for "has parent") is
+  // followed by the class name and then the span's two end points.
+  for (const span of spans.get(TYPE.BridgeContainer) ?? []) {
+    try {
+      if (span.name !== 'bridgeContainer') continue;
+      const r = at(span.start + 4);
+      if (r.u8() !== 4) continue;
+      r.skip(40); // position, rotation, scale
+      if (r.str() !== 'Bridge') continue;
+      const a = r.point();
+      const b = r.point();
+      bridges.push(...rasterizeSegment(a, b));
+    } catch {
+      notImported['Unreadable bridges'] = (notImported['Unreadable bridges'] ?? 0) + 1;
+    }
+  }
+
   for (const [recordType, list] of spans)
     for (const span of list) {
+      if (areaRecords.has(span)) continue;
       const label = NOT_IMPORTED[span.name];
       if (label) {
         notImported[label] = (notImported[label] ?? 0) + 1;
         continue;
       }
       if (nonBuildingTypes.has(recordType)) continue;
-      if (span.name.startsWith('raider') || span.end - span.start < 60) continue;
+      const raiderTower = span.name === 'raiderGuardTower';
+      if ((span.name.startsWith('raider') && !raiderTower) || span.end - span.start < 60) continue;
       try {
         const r = at(span.start);
         r.u32();
@@ -761,6 +840,15 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
         if (!(p.x >= 0 && p.x <= worldM && p.z >= 0 && p.z <= worldM)) continue;
         // Avoid reporting arbitrary record bytes that happen to resemble the start of a building.
         if (!/^[A-Za-z][A-Za-z0-9_.+`]{0,127}$/.test(cls)) continue;
+        // Raider guard towers use the player tower's class; fruit trees use a building-style header.
+        if (raiderTower) {
+          enemies.push({ kind: 'raiderTower', ...toTile(p) });
+          continue;
+        }
+        if (cls === 'FruitTreeResource') {
+          forageables.push({ kind: 'fruitTrees', ...toTile(p) });
+          continue;
+        }
         const prefab = prefabs.get(span.name)?.[span.index];
         const typeId = (prefab && PREFAB_TYPES[prefab]) || BUILDING_CLASSES[cls];
         if (!typeId) {
@@ -782,9 +870,10 @@ export function parseSave(buf: ArrayBuffer, fileName = 'save'): MapData {
       }
     }
 
-  // Keep roads after structures. Both roads and many gates/fences are 1x1, and the stable area sort
-  // in mapImport preserves this order so a road running under an entrance never hides the structure.
-  buildings.push(...roads);
+  // Keep bridges and then roads after structures. Both roads and many gates/fences are 1x1, and the
+  // stable area sort in mapImport preserves this order, so a road running under an entrance or onto
+  // a bridge never hides it.
+  buildings.push(...bridges, ...roads);
 
   return {
     name: fileName.replace(/\.sav$/i, ''),

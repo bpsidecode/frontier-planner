@@ -1,6 +1,6 @@
 import './style.css';
 import { getDowngrade, getType, type BuildingType } from './data/buildings';
-import { Plan, TILE_M, clamp, inBounds, rotatedSize, type Placed, type Rect } from './model/plan';
+import { Plan, TILE_M, clamp, inBounds, isZone, rotatedSize, type Placed, type Rect } from './model/plan';
 import { breakdown, computeField } from './model/desirability';
 import { evaluateHouses, nextLevel, summarize, type HouseInfo } from './model/houses';
 import { Camera } from './render/camera';
@@ -199,7 +199,7 @@ function ghost(): Ghost | null {
   const y = Math.floor(hover.y - r.h / 2 + 0.5);
   const rect = { x, y, w: r.w, h: r.h };
   const preview: Placed = { id: -1, typeId: placing.typeId, x, y, rot: placing.rot, ...sizeFields(t) };
-  return { typeId: placing.typeId, rect, preview, valid: plan.canPlace(rect) };
+  return { typeId: placing.typeId, rect, preview, valid: plan.canPlace(rect, 0, false, placing.typeId) };
 }
 
 // ---------- modes & actions ----------
@@ -274,7 +274,7 @@ function tryPaint(isClick: boolean) {
   if (key === drag.lastKey) return;
   drag.lastKey = key;
   if (!g.valid) {
-    if (isClick) toast(`Can’t place here: ${placeProblem(g.rect)}`);
+    if (isClick) toast(`Can’t place here: ${placeProblem(g.rect, g.typeId)}`);
     return;
   }
   const t = getType(placing.typeId);
@@ -341,13 +341,17 @@ function removeFlattened(index: number | 'all') {
 }
 
 /** Why a footprint can't be placed, for the toast. */
-function placeProblem(r: Rect): string {
+function placeProblem(r: Rect, typeId: string): string {
   if (!inBounds(r, plan.size)) return 'it goes past the edge of the map';
+  const zone = isZone(typeId);
+  const within = getType(typeId).within;
+  if (within && !plan.insideZone(r, within)) return `a ${getType(typeId).name} must be placed inside a ${getType(within).name}`;
   let water = false;
   let steep = false;
   for (let y = r.y; y < r.y + r.h; y++)
     for (let x = r.x; x < r.x + r.w; x++) {
-      if (plan.at(x, y)) return 'it overlaps another building';
+      const other = plan.at(x, y);
+      if (other && isZone(other.typeId) === zone) return zone ? 'it overlaps another field, pasture or graveyard' : 'it overlaps another building';
       const t = ground?.terrain[y * plan.size + x];
       water ||= t === Terrain.Water;
       steep ||= t === Terrain.Steep;
@@ -436,6 +440,7 @@ function renderInfo() {
       <div class="sub">${t.category} · ${t.variable ? 'adjustable size' : `${t.w}×${t.h} tiles`}${t.sizeUnverified ? ' (size is a guess)' : ''}</div>
       ${sizeInputs(t, placing.w, placing.h)}
       ${t.house ? '<p>A house’s level depends on the desirability at its center. See the table above.</p>' : describeEffect(t)}
+      ${t.within ? `<p class="tagnote">Must be placed inside a ${esc(getType(t.within).name)}.</p>` : ''}
       <p class="tagnote">Click to place, or drag to place several. R rotates. Esc or right-click stops placing.</p>`;
     bindSizeInputs((w, h) => {
       if (!placing || !t.variable) return;

@@ -214,7 +214,9 @@ export class Renderer {
     this.drawGrid(scene.size, scene.showGrid, !!this.map);
     if (this.map) this.drawOverlays(this.map, scene);
 
-    for (const b of scene.buildings) this.drawBuilding(b, scene.houses.get(b.id), b.id === scene.selectedId);
+    // Zones (fields, pastures, graveyards) first, so buildings standing on them draw on top.
+    for (const b of scene.buildings) if (getType(b.typeId).zone) this.drawBuilding(b, undefined, b.id === scene.selectedId);
+    for (const b of scene.buildings) if (!getType(b.typeId).zone) this.drawBuilding(b, scene.houses.get(b.id), b.id === scene.selectedId);
 
     const sel = scene.selectedId != null ? scene.buildings.find((b) => b.id === scene.selectedId) : undefined;
     if (sel) this.drawRadius(sel);
@@ -450,7 +452,11 @@ export class Renderer {
 
     const fill = house ? house.level.color : CATEGORY_COLORS[type.category];
     ctx.fillStyle = fill;
-    ctx.fillRect(r.x, r.y, r.w, r.h);
+    if (type.zone) {
+      ctx.globalAlpha = 0.55;
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.globalAlpha = 1;
+    } else ctx.fillRect(r.x, r.y, r.w, r.h);
 
     // Houses get a thicker border per level so tiers stay distinguishable at a glance.
     const d = type.desirability;

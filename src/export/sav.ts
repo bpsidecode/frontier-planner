@@ -28,6 +28,14 @@ export interface SaveExport {
 
 export class SaveMismatchError extends Error {}
 
+/** Objects imported from records the exporter can't patch yet. */
+const AREA_LABELS: Record<string, string> = {
+  'crop-field': 'Moved or resized crop fields',
+  pasture: 'Moved or resized pastures',
+  graveyard: 'Moved or resized graveyards',
+  bridge: 'Moved bridge tiles',
+};
+
 /** Compare the plan with the save it was imported from. */
 export function planSaveExport(plan: { buildings: Placed[]; flattened: Rect[] }, map: MapData): SaveExport {
   const out: SaveExport = { edits: [], notWritten: {}, needsReimport: false };
@@ -52,15 +60,16 @@ export function planSaveExport(plan: { buildings: Placed[]; flattened: Rect[] },
       continue;
     }
     seen.add(s.i);
-    const moved = b.x !== s.x || b.y !== s.y || b.rot !== s.rot;
+    const moved = b.x !== s.x || b.y !== s.y || b.rot !== s.rot || b.w !== s.w || b.h !== s.h;
     if (b.typeId !== s.typeId) bump('Upgraded or downgraded buildings');
     else if (!moved) continue;
     else if (road) bump('Moved road tiles');
-    else if (!from.rec) bump('Moved buildings with no record position');
+    else if (!from.rec) bump(AREA_LABELS[b.typeId] ?? 'Moved buildings with no record position');
     else out.edits.push({ i: s.i, typeId: b.typeId, rect: footprint(b), rot: b.rot, rotated: b.rot !== s.rot });
   }
   map.buildings.forEach((b, i) => {
-    if (!seen.has(i) && BUILDING_BY_ID[b.typeId] && !b.skipped) bump(b.typeId === 'road' ? 'Deleted road tiles' : 'Deleted buildings');
+    if (seen.has(i) || !BUILDING_BY_ID[b.typeId] || b.skipped) return;
+    bump(b.typeId === 'road' ? 'Deleted road tiles' : b.typeId === 'bridge' ? 'Deleted bridge tiles' : 'Deleted buildings');
   });
   if (plan.flattened.length) bump('Flattened areas', plan.flattened.length);
   return out;

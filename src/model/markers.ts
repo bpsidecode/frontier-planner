@@ -15,6 +15,7 @@ const SINGULAR: Record<string, string> = {
   'forage:nuts': 'Nuts',
   'forage:mushrooms': 'Mushrooms',
   'forage:eggs': 'Eggs',
+  'forage:fruitTrees': 'Fruit tree',
   'spawn:deer': 'Deer spawn area',
   'spawn:boar': 'Boar spawn area',
   'spawn:wolf': 'Wolf spawn area',
@@ -23,6 +24,7 @@ const SINGULAR: Record<string, string> = {
   'enemy:raiderCamp': 'Raider camp',
   'enemy:raider': 'Raider',
   'enemy:batteringRam': 'Battering ram',
+  'enemy:raiderTower': 'Raider guard tower',
   'ruin:relic': 'Relic site',
   'ruin:salvage': 'Salvage site',
 };

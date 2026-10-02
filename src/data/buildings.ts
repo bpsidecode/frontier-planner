@@ -48,6 +48,13 @@ export interface BuildingType {
   upgradeTo?: string;
   /** Buildings whose size the player chooses (fields, graveyards). */
   variable?: { min: number; max: number };
+  /**
+   * Areas laid out on the ground (crop fields, pastures, graveyards). Other buildings can stand on
+   * them, as fences around a pasture or a crypt in a graveyard do in the game; zones can't overlap each other.
+   */
+  zone?: boolean;
+  /** Catalog id of the zone this building must stand entirely inside (a Crypt in a Graveyard). */
+  within?: string;
 }
 
 type D = [value: number, rangeM: number, tag?: string, constant?: boolean];
@@ -102,14 +109,14 @@ add('Amenities', 'Apothecary Shop', 3, 2);
 // monuments have no desirability effect (confirmed); the Academy's is still unknown.
 add('Amenities', 'Academy', 5, 4);
 add('Amenities', 'Book Binder', 2, 3);
-add('Amenities', 'Crypt', 3, 3);
+add('Amenities', 'Crypt', 3, 3, null, { within: 'graveyard' });
 add('Amenities', 'Guild Hall', 5, 4);
 add('Amenities', 'Civic Monument', 5, 5);
 add('Amenities', 'Military Monument', 5, 5);
 add('Amenities', 'Rat Catcher', 2, 2);
 add('Amenities', 'Trading Post', 5, 4);
 add('Amenities', 'Trading Center', 5, 4);
-add('Amenities', 'Graveyard', 3, 3, null, { variable: { min: 3, max: 10 } });
+add('Amenities', 'Graveyard', 3, 3, null, { variable: { min: 3, max: 10 }, zone: true });
 
 // Decorations (Extravagant variants behave identically to their base versions, so they share entries)
 add('Decorations', 'Large Paved Park', 5, 5, [0.12, 200, 'Decorations']);
@@ -169,7 +176,9 @@ add('Food', 'Forager Garden', 3, 2);
 add('Food', 'Hunter Cabin', 3, 2);
 add('Food', 'Hunter Lodge', 3, 2);
 add('Food', 'Preservist Building', 3, 3);
-add('Food', 'Crop Field', 5, 5, null, { variable: { min: 5, max: 12 } });
+add('Food', 'Crop Field', 5, 5, null, { variable: { min: 5, max: 12 }, zone: true });
+// Pastures in saves are 7×7, 10×10 or 15×15. Desirability unknown.
+add('Food', 'Pasture', 7, 7, null, { variable: { min: 5, max: 15 }, zone: true });
 
 // Resources & industry
 add('Resources', 'Basic Well', 2, 2, [0.05, 80, 'Well']);
@@ -251,6 +260,8 @@ add('Roads & Fences', 'Fence Gate', 1, 1);
 add('Roads & Fences', 'Fieldstone Fence', 1, 1);
 add('Roads & Fences', 'Hedge Fence', 1, 1);
 add('Roads & Fences', 'Hedge Fence Gate', 1, 1);
+// Bridges are imported as a line of 1×1 tiles along the span. One tile wide is an assumption.
+add('Roads & Fences', 'Bridge', 1, 1);
 add('Roads & Fences', 'Wrought Iron Fence', 1, 1);
 add('Roads & Fences', 'Wrought Iron Fence Gate', 1, 1);
 

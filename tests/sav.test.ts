@@ -113,7 +113,23 @@ function syntheticSave(): ArrayBuffer {
       .point(17.5, 17.5).point(12.5, 17.5).point(7.5, 17.5).point(2.5, 17.5)
       .f32(0).f32(15).zeros(63),
   );
-  record(out, 'cropField', 3, new Writer().zeros(64));
+  // A 1×3 crop field down column 3: some bytes, then the grid block (cell 5 m, 1 column, 3 rows, offsets),
+  // five bytes, the tile count and the tile centers.
+  const field = new Writer().zeros(21).f32(5).u32(1).u32(3).f32(-2.5).f32(0.5).f32(-7.5).u8(0).u8(2).u8(32).u8(0).u8(1).u32(3);
+  for (const z of [2.5, 7.5, 12.5]) field.f32(2.5).f32(z);
+  record(out, 'cropField', 3, field.zeros(16));
+  // A bridge across the water in row 0, down column 0: header with flag 4, class name, then its two ends.
+  record(
+    out,
+    'bridgeContainer',
+    TYPE.BridgeContainer,
+    new Writer().u32(46).u8(4).point(17.5, 5).f32(0).f32(1).f32(0).f32(0).f32(1).f32(1).f32(1).str('Bridge').point(17.5, 2.5).point(17.5, 7.5).zeros(16),
+  );
+  // A raider guard tower (player tower class, raider record name) and a fruit tree.
+  const header = (id: number, x: number, z: number, cls: string) =>
+    new Writer().u32(id).u8(0).u8(0).point(x, z).f32(0).f32(0).f32(0).f32(1).f32(1).f32(1).f32(1).str(cls).zeros(32);
+  record(out, 'raiderGuardTower', 2071119359, header(47, 2.5, 17.5, 'GuardTower'));
+  record(out, 'fruitTreeResource', 5, header(48, 12.5, 17.5, 'FruitTreeResource'));
   return new Uint8Array(out.bytes).buffer;
 }
 
@@ -134,7 +150,7 @@ describe('save parser (synthetic)', () => {
     expect(map.fertility[0 * N + 3]).toBe(0);
     expect(map.water[2 * N + 1]).toBe(Math.round(0.2 * 255));
     expect(map.fodder[5]).toBe(Math.round(0.5 * 255));
-    expect(map.forageables).toEqual([
+    expect(map.forageables.filter((f) => f.kind !== 'fruitTrees')).toEqual([
       { kind: 'berries', x: 3.5, y: 0.5 },
       { kind: 'nuts', x: 2.5, y: 0.5 },
       { kind: 'mushrooms', x: 1.5, y: 0.5 },
@@ -152,7 +168,7 @@ describe('save parser (synthetic)', () => {
 
   it('has visible overlay and tooltip metadata for every forageable kind', () => {
     const visible = new Set(ALL_OVERLAY_KEYS);
-    const labels: Record<string, string> = { berries: 'Berries', nuts: 'Nuts', mushrooms: 'Mushrooms', eggs: 'Eggs' };
+    const labels: Record<string, string> = { berries: 'Berries', nuts: 'Nuts', mushrooms: 'Mushrooms', eggs: 'Eggs', fruitTrees: 'Fruit tree' };
     for (const f of map.forageables) expect(markersAt(map, visible, f.x, f.y)).toContain(labels[f.kind]);
   });
 
@@ -162,14 +178,19 @@ describe('save parser (synthetic)', () => {
     const iron = map.minerals.find((m) => m.kind === 'iron')!;
     expect(iron).toMatchObject({ x: 3, y: 1, r: 0.5, amount: 500, deep: true });
     expect(map.buildings).toEqual([
+      { typeId: 'crop-field', x: 3.5, y: 1.5, rot: 0, size: { w: 1, h: 3 } },
       { typeId: 'town-center', x: 2, y: 2, rot: 0 },
       { typeId: 'hunter-cabin', x: 2, y: 2.5, rot: 1, size: { w: 2, h: 3 }, rec: { pos: expect.any(Number), block: expect.any(Number) } },
+      { typeId: 'bridge', x: 0.5, y: 0.5, rot: 0 },
+      { typeId: 'bridge', x: 0.5, y: 1.5, rot: 0 },
       { typeId: 'road', x: 0.5, y: 3.5, rot: 0 },
       { typeId: 'road', x: 1.5, y: 3.5, rot: 0 },
       { typeId: 'road', x: 2.5, y: 3.5, rot: 0 },
       { typeId: 'road', x: 3.5, y: 3.5, rot: 0 },
     ]);
-    expect(map.notImported).toEqual({ 'Crop fields': 1 });
+    expect(map.notImported).toEqual({});
+    expect(map.enemies).toEqual([{ kind: 'raiderTower', x: 3.5, y: 3.5 }]);
+    expect(map.forageables.filter((f) => f.kind === 'fruitTrees')).toEqual([{ kind: 'fruitTrees', x: 1.5, y: 3.5 }]);
     expect(map.unknownBuildingClasses).toEqual({ Mystery: 1 });
   });
 
@@ -193,12 +214,14 @@ describe('save export (synthetic)', () => {
     const map = parseSave(buf, 'Test.sav');
     const plan = importSaveBuildings(map).plan;
     plan.setBlocked(null);
-    // Clear the imported road tiles so the cabin has room to move and turn.
-    for (const r of plan.buildings.filter((b) => b.typeId === 'road')) plan.remove(r.id);
+    // Clear everything but the cabin so it has room to move and turn.
+    for (const r of plan.buildings.filter((b) => b.typeId !== 'hunter-cabin')) plan.remove(r.id);
     const cabin = plan.buildings.find((b) => b.typeId === 'hunter-cabin')!;
     return { map, plan, cabin };
   };
   const f32 = (b: ArrayBuffer, o: number) => new DataView(b).getFloat32(o, true);
+  /** What `fresh()` deletes, as the export reports it. */
+  const cleared = { 'Deleted road tiles': 2, 'Deleted bridge tiles': 2, 'Deleted buildings': 1 };
 
   it('finds nothing to write in an unchanged plan', () => {
     const map = parseSave(buf, 'Test.sav');
@@ -213,7 +236,7 @@ describe('save export (synthetic)', () => {
     const ex = planSaveExport(plan, map);
     expect(ex.edits).toHaveLength(1);
     expect(ex.edits[0]).toMatchObject({ rotated: false, rect: { x: 0, y: 1, w: 2, h: 3 } });
-    expect(ex.notWritten).toEqual({ 'Deleted road tiles': 2 });
+    expect(ex.notWritten).toEqual(cleared);
 
     const out = writeSaveEdits(buf, map, ex.edits);
     expect(out.byteLength).toBe(buf.byteLength);
@@ -260,11 +283,11 @@ describe('save export (synthetic)', () => {
     expect(ex.notWritten).toEqual({
       'Added buildings': 1,
       'Upgraded or downgraded buildings': 1,
-      'Deleted road tiles': 2,
+      ...cleared,
       'Flattened areas': 1,
     });
     plan.remove(cabin.id);
-    expect(planSaveExport(plan, map).notWritten['Deleted buildings']).toBe(1);
+    expect(planSaveExport(plan, map).notWritten['Deleted buildings']).toBe(2); // the field and the cabin
   });
 
   it('asks for a re-import when the map has no record positions', () => {
@@ -351,10 +374,10 @@ describe.skipIf(!realPath)('real save file', () => {
             if (plan.update(b.id, { x: b.x + dx, y: b.y + dy })) return b;
       return null;
     };
-    const well = tryMove((b) => b.typeId === 'basic-well' && !!b.src);
+    const well = tryMove((b) => b.typeId === 'basic-well' && !!b.src && !!map.buildings[b.src.i].rec);
     const turned = plan.buildings.find((b) => {
       const f = footprint(b);
-      return b.src && f.w !== f.h && b.typeId !== 'road' && plan.rotate(b.id);
+      return b.src && map.buildings[b.src.i].rec && f.w !== f.h && plan.rotate(b.id);
     });
     expect(well).toBeTruthy();
     expect(turned).toBeTruthy();
@@ -391,8 +414,10 @@ describe.skipIf(!realPath)('real save file', () => {
     expect(count({ ...overlapping, road: 0 })).toBeLessThanOrEqual(5);
     // Every building's center fits its catalog size (wide gates are detected from their offsets).
     expect(sizeMismatch).toEqual({});
-    // Walls and gates can run to the water's edge; every other building must stand on land.
-    for (const b of plan.buildings.filter((x) => !x.typeId.startsWith('palisade-'))) {
+    // Walls and gates can run to the water's edge, bridges cross it and pastures can reach into it
+    // (one in the AllPair save does); every other building must stand on land.
+    const wet = (t: string) => t.startsWith('palisade-') || t === 'bridge' || t === 'pasture';
+    for (const b of plan.buildings.filter((x) => !wet(x.typeId))) {
       const f = footprint(b);
       for (let y = f.y; y < f.y + f.h; y++)
         for (let x = f.x; x < f.x + f.w; x++) expect(map.terrain[y * map.size + x]).not.toBe(Terrain.Water);

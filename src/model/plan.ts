@@ -26,6 +26,9 @@ export interface ImportSource {
   x: number;
   y: number;
   rot: number;
+  /** Imported size of fields, pastures and graveyards. */
+  w?: number;
+  h?: number;
 }
 
 export interface Rect {
@@ -66,6 +69,10 @@ export function center(p: Placed): { cx: number; cy: number } {
   return { cx: f.x + f.w / 2, cy: f.y + f.h / 2 };
 }
 
+export function isZone(typeId: string): boolean {
+  return !!BUILDING_BY_ID[typeId]?.zone;
+}
+
 export function inBounds(r: Rect, size = DEFAULT_SIZE): boolean {
   return r.x >= 0 && r.y >= 0 && r.x + r.w <= size && r.y + r.h <= size;
 }
@@ -75,8 +82,13 @@ export class Plan {
   /** Flattened ground areas in the order they were made. The controller turns them into `blocked`. */
   flattened: Rect[] = [];
   private nextId = 1;
-  /** Building id occupying each tile, 0 when empty. */
+  /** Building id occupying each tile, 0 when empty. Zones (fields, pastures, graveyards) are tracked separately. */
   private occ: Int32Array;
+  /**
+   * Topmost zone id under each tile, 0 when none. Buildings may stand on zones, and zones may
+   * overlap each other (the game allows overlapping pastures).
+   */
+  private zoneOcc: Int32Array;
 
   /**
    * @param size tiles per side
@@ -87,26 +99,30 @@ export class Plan {
     private blocked: Uint8Array | null = null,
   ) {
     this.occ = new Int32Array(size * size);
+    this.zoneOcc = new Int32Array(size * size);
   }
 
   private rebuild() {
     this.occ.fill(0);
-    for (const b of this.buildings) this.stamp(footprint(b), b.id);
+    this.zoneOcc.fill(0);
+    for (const b of this.buildings) this.stamp(footprint(b), b.id, isZone(b.typeId));
   }
 
-  private stamp(r: Rect, id: number) {
+  private stamp(r: Rect, id: number, zone = false) {
+    const grid = zone ? this.zoneOcc : this.occ;
     for (let y = r.y; y < r.y + r.h; y++)
-      for (let x = r.x; x < r.x + r.w; x++) this.occ[y * this.size + x] = id;
+      for (let x = r.x; x < r.x + r.w; x++) grid[y * this.size + x] = id;
   }
 
   get(id: number): Placed | undefined {
     return this.buildings.find((b) => b.id === id);
   }
 
-  /** Building occupying tile (x, y), if any. */
+  /** Building occupying tile (x, y), or else the zone under it, if any. */
   at(x: number, y: number): Placed | undefined {
     if (x < 0 || y < 0 || x >= this.size || y >= this.size) return undefined;
-    const id = this.occ[y * this.size + x];
+    const i = y * this.size + x;
+    const id = this.occ[i] || this.zoneOcc[i];
     return id ? this.get(id) : undefined;
   }
 
@@ -119,12 +135,29 @@ export class Plan {
     return !!this.blocked?.[y * this.size + x];
   }
 
-  canPlace(r: Rect, ignoreId = 0, ignoreTerrain = false): boolean {
+  /** Whether a footprint lies entirely inside one zone of the given type (e.g. a graveyard). */
+  insideZone(r: Rect, zoneType: string): boolean {
+    return this.buildings.some((z) => {
+      if (z.typeId !== zoneType) return false;
+      const f = footprint(z);
+      return r.x >= f.x && r.y >= f.y && r.x + r.w <= f.x + f.w && r.y + r.h <= f.y + f.h;
+    });
+  }
+
+  /**
+   * Whether a footprint is free of other buildings (zones only need the bounds and terrain), and
+   * meets the type's placement rule, such as a Crypt needing a Graveyard. `ignoreTerrain` (imports
+   * and restores) also trusts the placement rule.
+   */
+  canPlace(r: Rect, ignoreId = 0, ignoreTerrain = false, typeId?: string): boolean {
     if (!inBounds(r, this.size)) return false;
+    const zone = !!typeId && isZone(typeId);
+    const within = typeId ? BUILDING_BY_ID[typeId]?.within : undefined;
+    if (within && !ignoreTerrain && !this.insideZone(r, within)) return false;
     for (let y = r.y; y < r.y + r.h; y++)
       for (let x = r.x; x < r.x + r.w; x++) {
         const i = y * this.size + x;
-        const id = this.occ[i];
+        const id = zone ? 0 : this.occ[i];
         if (id && id !== ignoreId) return false;
         if (!ignoreTerrain && this.blocked?.[i]) return false;
       }
@@ -139,10 +172,11 @@ export class Plan {
     const id = p.id && p.id > 0 && !this.get(p.id) ? p.id : this.nextId;
     const b: Placed = { ...p, id };
     const r = footprint(b);
-    if (!this.canPlace(r, 0, opts.ignoreTerrain)) return null;
+    const zone = isZone(b.typeId);
+    if (!this.canPlace(r, 0, opts.ignoreTerrain, b.typeId)) return null;
     this.nextId = Math.max(this.nextId, id + 1);
     this.buildings.push(b);
-    this.stamp(r, b.id);
+    this.stamp(r, b.id, zone);
     return b;
   }
 
@@ -152,10 +186,27 @@ export class Plan {
     if (!b) return false;
     const next = { ...b, ...changes };
     const r = footprint(next);
-    if (!this.canPlace(r, id)) return false;
-    this.stamp(footprint(b), 0);
+    const zone = isZone(b.typeId);
+    if (!this.canPlace(r, id, false, b.typeId)) return false;
+    const old = footprint(b);
+    const before = { x: b.x, y: b.y, rot: b.rot, w: b.w, h: b.h };
+    // Buildings that must stand inside a zone (crypts) and currently do.
+    const dependents = zone ? this.buildings.filter((d) => this.ruleHolds(d)) : [];
     Object.assign(b, changes);
-    this.stamp(r, id);
+    // Zones can overlap, so clearing one's old tiles could clear a neighbor's: restamp them all.
+    if (zone) {
+      if (!dependents.every((d) => this.ruleHolds(d))) {
+        // Don't move or shrink a graveyard out from under its crypt.
+        Object.assign(b, before);
+        if (before.w === undefined) delete b.w;
+        if (before.h === undefined) delete b.h;
+        return false;
+      }
+      this.rebuild();
+    } else {
+      this.stamp(old, 0);
+      this.stamp(r, id);
+    }
     return true;
   }
 
@@ -166,23 +217,33 @@ export class Plan {
     const old = footprint(b);
     const next: Placed = { id: b.id, typeId, x: b.x, y: b.y, rot: b.rot };
     const r = footprint(next);
-    if (!inBounds(r, this.size)) return false;
+    if (!inBounds(r, this.size) || isZone(typeId) !== isZone(b.typeId)) return false;
+    const zone = isZone(typeId);
     for (let y = r.y; y < r.y + r.h; y++)
       for (let x = r.x; x < r.x + r.w; x++) {
         const i = y * this.size + x;
-        const occupant = this.occ[i];
+        const occupant = zone ? 0 : this.occ[i];
         if (occupant && occupant !== id) return false;
         // Imported buildings may already touch terrain classified as blocked. Let a same-size or
         // smaller replacement keep those tiles, but don't let a larger replacement claim new ones.
         const wasCovered = x >= old.x && x < old.x + old.w && y >= old.y && y < old.y + old.h;
         if (this.blocked?.[i] && !wasCovered) return false;
       }
-    this.stamp(old, 0);
     b.typeId = typeId;
     delete b.w;
     delete b.h;
-    this.stamp(r, id);
+    if (zone) this.rebuild();
+    else {
+      this.stamp(old, 0);
+      this.stamp(r, id);
+    }
     return true;
+  }
+
+  /** Whether a building with a placement rule (see `within`) meets it. */
+  private ruleHolds(b: Placed): boolean {
+    const within = BUILDING_BY_ID[b.typeId]?.within;
+    return !!within && this.insideZone(footprint(b), within);
   }
 
   /** Rotate 90° clockwise around the building's center, nudging it back into bounds if needed. */
@@ -239,7 +300,14 @@ export class Plan {
       };
       const s = b.src as Partial<ImportSource> | undefined;
       if (s && typeof s === 'object' && typeof s.typeId === 'string')
-        p.src = { i: int(s.i), typeId: s.typeId, x: int(s.x), y: int(s.y), rot: ((int(s.rot) % 4) + 4) % 4 };
+        p.src = {
+          i: int(s.i),
+          typeId: s.typeId,
+          x: int(s.x),
+          y: int(s.y),
+          rot: ((int(s.rot) % 4) + 4) % 4,
+          ...(s.w != null && s.h != null ? { w: int(s.w), h: int(s.h) } : {}),
+        };
       const v = getType(typeId).variable;
       if (v && b.w != null && b.h != null) {
         p.w = clamp(int(b.w), v.min, v.max);

@@ -41,11 +41,15 @@ Things to confirm in the game and correct where needed:
   - [ ] **Academy → Grand Academy.** The Academy's prefab didn't change between the two test saves, so the Grand Academy's id is still unknown.
   - [ ] **Two unidentified decorations:** a 1×1 decoration placed between the corner bench plazas and the medium plazas in the test row (prefab `fe6ea4b5…`), and a 2×2 decoration in the original town (prefab `1935626f…`).
   - [ ] **Which bush is which.** The four bushes were placed as a 2×2 block and are labeled in reading order. All four have the same size and desirability, so a mix-up doesn't change results.
-  - [ ] **Crop fields, pastures and graveyards.** Their records store a list of tiles instead of a position.
+  - [x] **Crop fields, pastures and graveyards.** Their records hold a grid block and a list of tile centers; every one in the test saves is a full rectangle, so they import as resizable planner objects. They're zones: other buildings can stand on them, as the game's pasture fences, barns and apiaries and the graveyard's crypt do, and they can overlap each other, as two pastures in the AllPair save do.
+  - [x] **Pasture and graveyard desirability.** Confirmed: neither affects desirability.
+  - [x] **Crypts must be placed inside a graveyard.** The planner refuses a Crypt outside one, and won't let a graveyard move or shrink away from its crypt.
   - [x] **Roads.** Road splines (`splineRoadContainer`) are rasterized onto the game's 5 m grid and imported as editable 1×1 Road objects.
-  - [ ] **Bridges.**
+  - [x] **Bridges.** Each bridge record holds its two end points; the span is imported as a line of 1×1 Bridge tiles (17 for the Lametree bridge).
+  - [x] **Bridge width.** Confirmed: bridges are one tile wide.
   - [x] **Wide gates.** Gates centered as if two tiles wide import as the 2×1 Wide Gate (6 in the Lametree save).
-  - [ ] **Raider guard towers.** Their records (`raiderGuardTower0`) use a different layout and aren't shown yet.
+  - [x] **Raider guard towers.** Their records use the standard building header with the player tower's class, and they're shown in the Enemies overlay (8 in the alpine save, 15 in the large lowland save).
+  - [x] **Fruit trees.** `FruitTreeResource` records are shown in the Forageables overlay (277 in the Lametree saves, mostly in orchards).
 - [ ] **Add desirability values for v1.1 buildings.** Still unknown for the Academy. The Pharmacy hasn't appeared in any save yet. Add values in [`src/data/buildings.ts`](src/data/buildings.ts).
   - [x] Confirmed to have no desirability effect: Book Binder, Crypt, Vault, Storage Depots, Guild Hall, Forager Garden, the monuments, the bench plazas, and Crates and Barrels.
 - [x] **Support terrain flattening.** The Flatten tool (F) levels a dragged rectangle to its average height, as the game does, and re-checks the slopes in and around it. Flattened areas are saved with the plan and can be undone or removed. Maps imported before this change need importing again, because heights weren't kept.
@@ -65,7 +69,6 @@ Things to confirm in the game and correct where needed:
   - [x] **Export .sav button** for moved and rotated buildings ([`src/export/sav.ts`](src/export/sav.ts)). It patches a copy of the original save, which you pick again when exporting, and refuses a file whose buildings aren't where the import found them. Added, deleted and upgraded buildings, road edits and flattening are listed as not written back.
   - [x] **Exported saves work in-game:** tested on larger saves with many moved and rotated buildings, including ones with workers.
   - [ ] **Write back more changes:** deleted buildings, upgrades (a different prefab id), road edits, flattening (the heightmap is plain floats, but the game may keep other terrain data alongside it) and added buildings, roughly in order of difficulty.
-  - [ ] **Raider guard towers** decode with the standard building header in the alpine save, so they may be easier to show than the to-do item above suggests.
 
 ## Features
 
@@ -108,12 +111,12 @@ What the import brings in:
   - Water and steep ground are drawn on a shaded relief and block building placement. The placement preview turns red there, and a message says why.
   - Water is ground below 3 m. Steep ground rises more than 4 m to a neighboring tile.
   - Steep ground can be flattened with the Flatten tool (see Features).
-- **Your town:** your buildings become planner buildings at their real position and rotation, so they count toward desirability and population. Roads are reconstructed from their saved curves as editable 1×1 road tiles. You can move or delete imported objects like anything placed in the planner. Crop fields, pastures, graveyards, bridges and a few decorations aren't imported yet; the Map panel lists what was left out.
+- **Your town:** your buildings become planner buildings at their real position and rotation, so they count toward desirability and population. Roads are reconstructed from their saved curves as editable 1×1 road tiles. You can move or delete imported objects like anything placed in the planner. Crop fields, pastures and graveyards import as zones that buildings can stand on, and bridges as 1×1 bridge tiles. A few decorations and construction sites aren't imported yet; the Map panel lists what was left out.
 - **Overlays:** the Map panel toggles each one. All are on by default, and your choices are remembered.
   - **Minerals:** clay, sand, stone, iron, gold and coal, drawn at their real radius and labeled with the amount (∞ for deep deposits).
-  - **Forageables:** greens, herbs, roots, willow, berries, nuts, mushrooms and eggs.
+  - **Forageables:** greens, herbs, roots, willow, berries, nuts, mushrooms, eggs and fruit trees.
   - **Animal spawn areas:** deer, boar, wolf and bear, as 64 m squares.
-  - **Enemies:** wolf dens, raider camps, raiders and battering rams.
+  - **Enemies:** wolf dens, raider camps, raider guard towers, raiders and battering rams.
   - **Ruins:** relic and salvage sites.
 - **Views**
   - The toolbar switches between **Desirability** (the default), **Fertility**, **Fodder** and **Water** (groundwater for wells).

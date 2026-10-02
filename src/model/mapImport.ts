@@ -39,9 +39,14 @@ export function importSaveBuildings(map: MapData): ImportReport {
     .sort((a, b) => area(b.b.typeId) - area(a.b.typeId));
 
   for (const { b, i } of ordered) {
-    const fits = (typeId: string, rot: number) => {
+    // Fields, pastures and graveyards are sized by the player; the save gives their size.
+    const dims = (typeId: string) => {
       const t = getType(typeId);
-      const s = rotatedSize(t.w, t.h, rot);
+      return t.variable && b.size ? b.size : { w: t.w, h: t.h };
+    };
+    const fits = (typeId: string, rot: number) => {
+      const d = dims(typeId);
+      const s = rotatedSize(d.w, d.h, rot);
       return (s.w % 2 === 1) === isHalf(b.x) && (s.h % 2 === 1) === isHalf(b.y);
     };
     // Keep the game's full rotation (0–3): a building turned 180° looks the same in the planner, but
@@ -54,11 +59,12 @@ export function importSaveBuildings(map: MapData): ImportReport {
       if (fits(typeId, rot + 1)) rot = (rot + 1) % 4;
       else bump(report.sizeMismatch, typeId);
     }
-    const t = getType(typeId);
-    const s = rotatedSize(t.w, t.h, rot);
+    const d = dims(typeId);
+    const s = rotatedSize(d.w, d.h, rot);
     const x = Math.round(b.x - s.w / 2);
     const y = Math.round(b.y - s.h / 2);
-    const placed = plan.add({ typeId, x, y, rot, src: { i, typeId, x, y, rot } }, { ignoreTerrain: true });
+    const sized = getType(typeId).variable ? { w: d.w, h: d.h } : {};
+    const placed = plan.add({ typeId, x, y, rot, ...sized, src: { i, typeId, x, y, rot, ...sized } }, { ignoreTerrain: true });
     if (placed) delete b.skipped;
     else b.skipped = true;
     bump(placed ? report.imported : report.overlapping, typeId);
