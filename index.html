@@ -38,7 +38,6 @@
             <button data-view="water" title="Groundwater for wells (needs an imported map)">Water</button>
           </div>
           <label title="Toggle grid lines (G)"><input type="checkbox" id="toggle-grid" checked /> Grid</label>
-          <button data-act="fit" title="Fit the whole grid in view">Reset view</button>
           <span class="spacer"></span>
           <button data-act="import-save" title="Import terrain and resources from a Farthest Frontier .sav file">Import save</button>
           <button data-act="export-save" title="Write moved and rotated buildings back into a copy of the imported save">Export .sav</button>
@@ -50,6 +49,8 @@
           <input type="file" id="sav-original" accept=".sav" hidden />
         </div>
         <div id="canvas-wrap">
+          <button id="toggle-left" class="panel-toggle left" aria-controls="left" aria-expanded="true" title="Hide the building list">‹</button>
+          <button id="toggle-right" class="panel-toggle right" aria-controls="right" aria-expanded="true" title="Hide the side panel">›</button>
           <canvas id="map"></canvas>
           <div id="tooltip" hidden></div>
           <div id="toast" hidden></div>

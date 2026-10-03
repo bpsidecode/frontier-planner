@@ -86,7 +86,8 @@ Things to confirm in the game and correct where needed:
   - The grid is 100×100 tiles, or the map size (256, 384 or 512 tiles a side) after importing a save.
   - The mouse wheel zooms toward the cursor.
   - Pan by dragging empty ground, dragging with the right or middle mouse button, or holding Space and dragging.
-  - **Reset view** fits the whole grid in the window.
+  - The view fits the whole grid when the page opens and after importing a save.
+- **Side panels:** the tabs on the map's left and right edges hide and show the building list and the right-hand panel, giving the map more room. Your choice is remembered.
 - **Placing buildings**
   - Pick a building from the searchable list on the left. A preview snaps to the grid and turns red when it's off the grid, overlapping another building, or on water or steep ground.
   - Click to place it. Drag to place several at once, which is handy for roads.
@@ -94,7 +95,7 @@ Things to confirm in the game and correct where needed:
 - **Rotating:** press R or Tab, or use the toolbar button. This works on the preview and on a selected building. A rotated building keeps the same center.
 - **Selecting, moving and deleting:** click a building to select it, drag it to move it, and press Delete or Backspace to remove it. Moves snap to the grid and only happen when the new spot is valid.
 - **Flattening ground:** press F or use **Flatten**, then drag a rectangle over an imported map. The whole area is set to its average height, like the game's flatten tool, so high ground is lowered and low ground raised. While you drag, the panel shows the target height, cut and fill in m³, and how many tiles become buildable or steep. The panel lists the flattened areas so you can remove them, and the tooltip shows each tile's elevation.
-- **Exporting to the game:** after moving or rotating buildings imported from a save, **Export .sav** writes those changes into a copy of that save. Pick the original `.sav` when asked (it isn't changed); the copy downloads as `<name>_planner.sav`, to put in the game's save folder next to the original. Moved crop fields, pastures and graveyards are written back too. Buildings you add, delete or upgrade, resized fields, pastures and graveyards, road and bridge edits and flattening aren't written back yet, and the export lists them first. Trees and rocks aren't in the planner, so check that moved buildings don't land on them.
+- **Exporting to the game:** after moving or rotating buildings imported from a save, **Export .sav** builds a new save from the original with those changes. Pick the original `.sav` when asked (it isn't changed); the new save downloads as `<name>_planner.sav`, to put in the game's save folder next to the original. Moved crop fields, pastures and graveyards are written back too. Buildings you add, delete or upgrade, resized fields, pastures and graveyards, road and bridge edits and flattening aren't written back yet, and the export lists them first. Trees and rocks aren't in the planner, so check that moved buildings don't land on them.
 - **Undo and redo:** Ctrl+Z to undo, Ctrl+Shift+Z or Ctrl+Y to redo.
 - **Range display:** a building's range circle only appears while it's selected or being placed. The circle is labeled with the range in meters and says whether the effect at the edge is half or full.
 - **Heatmap**

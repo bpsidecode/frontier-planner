@@ -861,11 +861,10 @@ async function exportSave() {
     .join(', ')
     .replace(/, ([^,]*)$/, ' and $1');
   const body = [
-    skipped.length ? `Not written back yet: ${skipped.join(', ')}.` : '',
-    'Trees and rocks aren’t shown in the planner, so check in-game that moved buildings don’t land on them.',
-    `Next, choose the original save file (${map.name}.sav). It isn’t changed: the edited copy downloads as ${map.name}_planner.sav.`,
+    `This builds a new save, ${map.name}_planner.sav, from your original ${map.name}.sav with ${what}. Your original save isn’t changed.`,
+    skipped.length ? `Not included yet: ${skipped.join(', ')}.` : '',
   ].filter(Boolean);
-  if (!(await ask({ title: `Write ${what} into a copy of the save?`, body, ok: 'Choose original save…' }))) return;
+  if (!(await ask({ title: 'Export a new save', body, ok: 'Choose original save…' }))) return;
   pendingEdits = ex.edits;
   savOriginalInput.click();
 }
@@ -915,10 +914,6 @@ const actions: Record<string, () => void> = {
   delete: deleteSelected,
   undo,
   redo,
-  fit: () => {
-    cam.fit(renderer.width, renderer.height, plan.size);
-    draw();
-  },
   export: () => exportPlan(plan, map),
   import: () => fileInput.click(),
   'import-save': importSave,
@@ -939,6 +934,50 @@ document.querySelectorAll<HTMLButtonElement>('#toolbar [data-act]').forEach((btn
     btn.blur();
   }),
 );
+
+// ---------- side panels ----------
+
+const PANELS_KEY = 'ff-planner:panels:v1';
+const appEl = $('#app');
+
+function setPanel(side: 'left' | 'right', open: boolean) {
+  appEl.classList.toggle(`${side}-collapsed`, !open);
+  const btn = $<HTMLButtonElement>(`#toggle-${side}`);
+  btn.setAttribute('aria-expanded', String(open));
+  // The arrow points the way the panel will move.
+  btn.textContent = (side === 'left') === open ? '‹' : '›';
+  btn.title = `${open ? 'Hide' : 'Show'} the ${side === 'left' ? 'building list' : 'side panel'}`;
+}
+
+function savePanels() {
+  try {
+    localStorage.setItem(
+      PANELS_KEY,
+      JSON.stringify({ left: !appEl.classList.contains('left-collapsed'), right: !appEl.classList.contains('right-collapsed') }),
+    );
+  } catch {
+    /* a per-viewer convenience; fine to lose */
+  }
+}
+
+for (const side of ['left', 'right'] as const)
+  $(`#toggle-${side}`).addEventListener('click', (e) => {
+    // Keep the map where it is on screen: the canvas's left edge moves with the left panel.
+    const before = wrap.getBoundingClientRect().left;
+    setPanel(side, appEl.classList.contains(`${side}-collapsed`));
+    cam.pan(before - wrap.getBoundingClientRect().left, 0);
+    draw();
+    savePanels();
+    (e.currentTarget as HTMLElement).blur();
+  });
+
+try {
+  const saved = JSON.parse(localStorage.getItem(PANELS_KEY) ?? '{}');
+  if (saved.left === false) setPanel('left', false);
+  if (saved.right === false) setPanel('right', false);
+} catch {
+  /* start with both open */
+}
 
 // ---------- legend ----------
 

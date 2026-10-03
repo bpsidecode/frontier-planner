@@ -7,7 +7,7 @@ Frontier Planner is a browser-based town planner for the game Farthest Frontier.
 ## Commands
 
 ```bash
-npm run dev                      # dev server at http://localhost:5173
+npm run dev                      # dev server at http://localhost:5173/frontier-planner/
 npm test                         # vitest, all tests
 npx vitest run tests/model.test.ts -t "house levels"   # a single file or test name
 npx tsc -p .                     # type-check (there is no linter)
@@ -15,7 +15,7 @@ npm run build                    # tsc, then vite build
 FF_SAV=/path/to/save.sav npm test   # also runs the real-save parser tests (skipped otherwise)
 ```
 
-Never commit save files; `.gitignore` excludes `*.sav` and `test-fixtures/`. To test an import in the browser, copy a save into `test-fixtures/`, fetch it from the page and put it into the `#sav-file` input with a `DataTransfer`, because the file dialog can't be driven.
+Never commit save files; `.gitignore` excludes `*.sav` and `test-fixtures/`. To test an import in the browser, copy a save into `test-fixtures/`, fetch it from the page (under the `/frontier-planner/` base path, e.g. `/frontier-planner/test-fixtures/x.sav`) and put it into the `#sav-file` input with a `DataTransfer`, because the file dialog can't be driven.
 
 ## Architecture
 
